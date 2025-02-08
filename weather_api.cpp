@@ -22,7 +22,11 @@ WeatherData WeatherAPI::fetchWeather() {
         return currentWeatherData;
     }
 
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     httplib::SSLClient cli(WEATHER_API_URL_HOST);
+#else
+    httplib::Client cli(WEATHER_API_URL_HOST);
+#endif
     cli.set_connection_timeout(5);
     
     auto res = cli.Get(WEATHER_API_URL_PATH);
