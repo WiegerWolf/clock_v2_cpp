@@ -140,7 +140,7 @@ void Clock::update() {
 
     // Draw date
     std::stringstream dateStream;
-    dateStream << WEEKDAYS_RU[now_tm->tm_wday] << ", " << now_tm->tm_mday << " " << MONTHS_RU[now_tm->tm_mon + 1] << " " << (now_tm->tm_year + 1900) << " года";
+    dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", " << now_tm->tm_mday << " " << MONTHS_RU.at(now_tm->tm_mon + 1) << " " << (now_tm->tm_year + 1900) << " года";
     display->renderText(
         dateStream.str(),
         display->fontSmall,
