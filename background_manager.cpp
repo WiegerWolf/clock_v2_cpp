@@ -31,17 +31,12 @@ std::string BackgroundManager::fetchImageUrl() {
     cli.set_follow_location(true);
     cli.enable_server_certificate_verification(false);
     
-    std::cout << "Fetching from: " << BACKGROUND_API_URL_HOST << BACKGROUND_API_URL_PATH << std::endl;
     auto res = cli.Get(BACKGROUND_API_URL_PATH);
     
     if (!res) {
         error = "Failed to get response";
-        std::cout << "HTTP request failed: no response" << std::endl;
         return "";
     }
-    
-    std::cout << "Status: " << res->status << std::endl;
-    std::cout << "Response body: " << res->body << std::endl;
     
     if (res->status == 200) {
         try {
@@ -70,22 +65,15 @@ SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
 }
 
 SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int height) {
-    std::cout << "Loading image from URL: " << url << std::endl;
-    
-    // Parse URL properly - remove https:// prefix
     std::string hostWithProto = url.substr(0, url.find("/", 8));
     std::string host = hostWithProto.substr(hostWithProto.find("://") + 3);
     std::string path = url.substr(url.find("/", 8));
-    
-    std::cout << "Host (cleaned): " << host << std::endl;
-    std::cout << "Path: " << path << std::endl;
     
     httplib::SSLClient cli(host);
     cli.set_follow_location(true);
     cli.enable_server_certificate_verification(false);
     
-    // Set read timeout to avoid hanging
-    cli.set_read_timeout(5, 0); // 5 seconds timeout
+    cli.set_read_timeout(5, 0);
     cli.set_write_timeout(5, 0);
     cli.set_connection_timeout(5, 0);
     
@@ -93,12 +81,8 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
     
     if (!res) {
         error = "Failed to get image response: " + std::string(httplib::to_string(res.error()));
-        std::cout << "Image HTTP request failed: " << error << std::endl;
         return nullptr;
     }
-    
-    std::cout << "Image response status: " << res->status << std::endl;
-    std::cout << "Image response size: " << res->body.size() << std::endl;
     
     if (res && res->status == 200) {
         SDL_RWops* rw = SDL_RWFromMem((void*)res->body.data(), res->body.size());
