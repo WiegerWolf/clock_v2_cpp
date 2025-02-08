@@ -1,6 +1,7 @@
 // display.cpp
 #include "display.h"
 #include "config.h"
+#include "constants.h"
 #include "background_manager.h"
 #include <iostream>
 #include <vector>
@@ -16,12 +17,12 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     }
 
     int fontSize = calculateFontSize();
-    fontLarge = TTF_OpenFont(nullptr, fontSize); // Using default font, you can specify a font file path
+    fontLarge = TTF_OpenFont(FONT_PATH, fontSize);
     if (!fontLarge) {
         std::cerr << "TTF_OpenFont (large) failed: " << TTF_GetError() << std::endl;
         // Handle error
     }
-    fontSmall = TTF_OpenFont(nullptr, fontSize / 8);
+    fontSmall = TTF_OpenFont(FONT_PATH, fontSize / 8);
     if (!fontSmall) {
         std::cerr << "TTF_OpenFont (small) failed: " << TTF_GetError() << std::endl;
         // Handle error
@@ -39,7 +40,7 @@ int Display::calculateFontSize() {
     int targetHeight = static_cast<int>(sizeH * 0.8);
     int testSize = 100;
     while (true) {
-        TTF_Font* testFont = TTF_OpenFont(nullptr, testSize);
+        TTF_Font* testFont = TTF_OpenFont(FONT_PATH, testSize);
         if (!testFont) return testSize - 10; // Error opening font, return a slightly smaller size
         int textWidth, textHeight;
         TTF_SizeText(testFont, "22:22", &textWidth, &textHeight);
@@ -131,7 +132,7 @@ void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_C
 
     while (minSize <= maxSize) {
         int testSize = (minSize + maxSize) / 2;
-        TTF_Font* testFont = TTF_OpenFont(nullptr, testSize);
+        TTF_Font* testFont = TTF_OpenFont(FONT_PATH, testSize);
         if (!testFont) break; // Handle font opening error
 
         int width1, height1, width2, height2;
@@ -148,7 +149,7 @@ void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_C
         TTF_CloseFont(testFont);
     }
 
-    TTF_Font* finalFont = TTF_OpenFont(nullptr, optimalSize);
+    TTF_Font* finalFont = TTF_OpenFont(FONT_PATH, optimalSize);
     if (!finalFont) return; // Handle font opening error
 
     int lineHeight = static_cast<int>(TTF_FontLineSkip(finalFont) * lineSpacing);

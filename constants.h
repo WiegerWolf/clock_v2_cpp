@@ -11,5 +11,6 @@ extern const double BACKGROUND_DARKNESS;
 extern const char* WEATHER_API_URL_HOST;
 extern const int WEATHER_API_URL_PORT;
 extern const char* WEATHER_API_URL_PATH;
+extern const char* FONT_PATH;
 
 #endif // CONSTANTS_H
