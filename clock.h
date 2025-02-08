@@ -28,6 +28,7 @@ private:
     time_t lastAdviceUpdate;
     int adviceUpdateInterval;
     std::string clothingAdvice;
+    double currentWind;  // Add this line to track wind
 
     void handleEvents();
     bool shouldUpdateAdvice();

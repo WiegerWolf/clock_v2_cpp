@@ -17,7 +17,7 @@
 #include <iomanip>
 #include <sstream>
 
-Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice("") {}
+Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice(""), currentWind(0.0) {}
 
 Clock::~Clock() {
     if (display) delete display;
@@ -110,9 +110,9 @@ void Clock::update() {
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
-    double wind = 0.2 * sin(static_cast<double>(currentTime));
+    currentWind = 0.2 * sin(static_cast<double>(currentTime));
 
-    snow->update(wind);
+    snow->update(currentWind, display);
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     if (shouldUpdateAdvice()) {
@@ -132,10 +132,12 @@ void Clock::draw() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     
-    // 1. Draw background
     backgroundManager->draw(renderer);
 
-    // 2. Draw all text elements
+    // Begin capturing text renders
+    display->beginTextCapture();
+    
+    // Draw all text elements
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
@@ -187,8 +189,12 @@ void Clock::draw() {
             1.2f
         );
     }
+    
+    // End text capture and switch back to main render target
+    display->endTextCapture();
 
-    // 3. Draw snow on top
+    // Draw snow on top of everything
+    snow->update(currentWind, display);
     snow->draw(renderer);
     
     SDL_RenderPresent(renderer);

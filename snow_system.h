@@ -4,6 +4,7 @@
 
 #include <SDL.h>
 #include <vector>
+#include "display.h"  // Add this include
 
 struct Snowflake {
     float x, y, speed, drift;
@@ -11,6 +12,8 @@ struct Snowflake {
     float angle;        // Current rotation angle
     float angleVel;     // Angular velocity
     int radius;
+    bool settled;       // Whether the snowflake has settled on text
+    int settleTime;     // How long it's been settled
 };
 
 class SnowSystem {
@@ -18,13 +21,14 @@ public:
     SnowSystem(int numFlakes, int screenWidth, int screenHeight);
     ~SnowSystem() = default;
 
-    void update(double wind);
+    void update(double wind, const Display* display);
     void draw(SDL_Renderer* renderer);
 
 private:
     Snowflake createSnowflake(int screenWidth, int screenHeight);
     std::vector<Snowflake> snowflakes;
     int screenWidth, screenHeight;
+    static const int SETTLE_TIMEOUT = 1000; // Time before settled snow disappears
 };
 
 #endif // SNOW_SYSTEM_H

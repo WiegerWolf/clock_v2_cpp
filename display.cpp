@@ -9,7 +9,8 @@
 #include <climits>  // Add this line for INT_MAX
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
-    : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), backgroundManager(new BackgroundManager()) {
+    : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), 
+    backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr) {
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
         std::cerr << "SDL_CreateRGBSurface failed: " << SDL_GetError() << std::endl;
@@ -27,6 +28,16 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
         std::cerr << "TTF_OpenFont (small) failed: " << TTF_GetError() << std::endl;
         // Handle error
     }
+
+    // Create target textures
+    mainTarget = SDL_GetRenderTarget(renderer);
+    textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                  SDL_TEXTUREACCESS_TARGET, width, height);
+    if (!textCapture) {
+        std::cerr << "Failed to create text capture texture: " << SDL_GetError() << std::endl;
+    }
+    texturePitch = width * 4; // 4 bytes per pixel (RGBA)
+    textPixels = new Uint32[width * height];
 }
 
 Display::~Display() {
@@ -34,6 +45,8 @@ Display::~Display() {
     if (fontSmall) TTF_CloseFont(fontSmall);
     if (screenSurface) SDL_FreeSurface(screenSurface);
     if (backgroundManager) delete backgroundManager;
+    if (textCapture) SDL_DestroyTexture(textCapture);
+    delete[] textPixels;
 }
 
 int Display::calculateFontSize() {
@@ -177,7 +190,19 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
     textRect.x = centerX - textRect.w / 2;
     textRect.y = centerY - textRect.h / 2;
 
+    // Render to both textures
+    SDL_Texture* currentTarget = SDL_GetRenderTarget(renderer);
+    
+    // Render to collision texture
+    SDL_SetRenderTarget(renderer, textCapture);
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    
+    // Render to screen
+    SDL_SetRenderTarget(renderer, mainTarget);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+    
+    // Restore original target
+    SDL_SetRenderTarget(renderer, currentTarget);
 
     SDL_DestroyTexture(textTexture);
     SDL_FreeSurface(textSurface);
@@ -191,4 +216,34 @@ void Display::clear() {
 
 void Display::update() {
     // SDL_Renderer is updated in the main loop after drawing everything.
+}
+
+void Display::beginTextCapture() {
+    // Store current render target and switch to text capture
+    mainTarget = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, textCapture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+}
+
+void Display::endTextCapture() {
+    // Capture the current text state
+    updateTextCapture();
+    // Switch back to main render target
+    SDL_SetRenderTarget(renderer, mainTarget);
+}
+
+void Display::updateTextCapture() {
+    SDL_Rect rect = {0, 0, sizeW, sizeH};
+    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_RGBA8888,
+                            textPixels, texturePitch) < 0) {
+        std::cerr << "Failed to read pixels: " << SDL_GetError() << std::endl;
+    }
+}
+
+bool Display::isPixelOccupied(int x, int y) const {
+    if (x < 0 || x >= sizeW || y < 0 || y >= sizeH) return false;
+    Uint32 pixel = textPixels[y * sizeW + x];
+    Uint8 alpha = (pixel & 0xFF000000) >> 24;
+    return alpha > 50; // Consider pixels with alpha > 50 as solid
 }

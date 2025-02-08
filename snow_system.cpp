@@ -23,7 +23,9 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
         distrib_alpha(gen),
         distrib_angle(gen),
         distrib_angle_vel(gen),
-        distrib_radius(gen)
+        distrib_radius(gen),
+        false,  // settled
+        0      // settleTime
     };
 }
 
@@ -34,17 +36,44 @@ SnowSystem::SnowSystem(int numFlakes, int width, int height) : screenWidth(width
     }
 }
 
-void SnowSystem::update(double wind) {
+void SnowSystem::update(double wind, const Display* display) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> distrib_drift_rand(-0.1f, 0.1f);  // Changed to float
 
     for (auto& snow : snowflakes) {
+        if (snow.settled) {
+            snow.settleTime++;
+            if (snow.settleTime > SETTLE_TIMEOUT) {
+                // Make the snowflake disappear and create a new one
+                snow = createSnowflake(screenWidth, screenHeight);
+                snow.y = -10;
+            }
+            continue;
+        }
+
+        // Previous position for collision check
+        int prevY = static_cast<int>(snow.y);
+        
         // Update position
         snow.y += snow.speed;
         float new_drift = snow.drift + distrib_drift_rand(gen);
         snow.drift = std::max(-2.0f, std::min(2.0f, new_drift));  // Use consistent float types
         snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 2.0f));  // Larger flakes are more affected by wind
+
+        // Check for collision with text
+        int currentX = static_cast<int>(snow.x);
+        int currentY = static_cast<int>(snow.y);
+        
+        // Check a few pixels below the snowflake for collision
+        for (int checkY = prevY; checkY <= currentY; ++checkY) {
+            if (display->isPixelOccupied(currentX, checkY + snow.radius)) {
+                snow.y = checkY;
+                snow.settled = true;
+                snow.settleTime = 0;
+                break;
+            }
+        }
 
         // Update rotation
         snow.angle += snow.angleVel;

@@ -19,6 +19,10 @@ public:
     void renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY);
     void renderMultilineText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int startY, float lineSpacing);
 
+    bool isPixelOccupied(int x, int y) const;
+    void beginTextCapture();
+    void endTextCapture();
+
     TTF_Font* fontLarge;
     TTF_Font* fontSmall;
     SDL_Renderer* renderer;
@@ -31,6 +35,12 @@ private:
     std::vector<std::string> wrapText(const std::string& text, TTF_Font* font, int maxWidth);
     bool needsTwoLines(const std::string& text, TTF_Font* font, int maxWidth);
     std::pair<std::string, std::string> splitIntoTwoLines(const std::string& text);
+
+    SDL_Texture* textCapture;
+    void updateTextCapture();
+    Uint32* textPixels;
+    int texturePitch;
+    SDL_Texture* mainTarget;  // Add this line to store the main render target
 };
 
 #endif // DISPLAY_H
