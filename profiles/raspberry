@@ -17,6 +17,7 @@ RANLIB=arm-linux-gnueabihf-ranlib
 # Add architecture-specific flags
 CFLAGS=-mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
 CXXFLAGS=-mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
+PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
 
 [options]
 opus/*:with_asm=True
