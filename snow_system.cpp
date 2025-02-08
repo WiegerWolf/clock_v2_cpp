@@ -9,12 +9,12 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> distrib_pos_x(0.0f, static_cast<float>(width));
     std::uniform_real_distribution<float> distrib_pos_y(0.0f, static_cast<float>(height));
-    std::uniform_real_distribution<float> distrib_speed(1.0f, 3.0f);
-    std::uniform_real_distribution<float> distrib_drift(-0.5f, 0.5f);
-    std::uniform_real_distribution<float> distrib_alpha(0.3f, 0.9f);
+    std::uniform_real_distribution<float> distrib_speed(0.3f, 1.2f);     // Reduced speed range
+    std::uniform_real_distribution<float> distrib_drift(-0.2f, 0.2f);    // Reduced drift range
+    std::uniform_real_distribution<float> distrib_alpha(0.2f, 0.7f);     // Reduced opacity range
     std::uniform_real_distribution<float> distrib_angle(0.0f, 360.0f);
-    std::uniform_real_distribution<float> distrib_angle_vel(-2.0f, 2.0f);
-    std::uniform_int_distribution<> distrib_radius(1, 4);
+    std::uniform_real_distribution<float> distrib_angle_vel(-1.0f, 1.0f); // Reduced rotation speed
+    std::uniform_int_distribution<> distrib_radius(1, 3);                 // Smaller snowflakes
     std::uniform_real_distribution<float> distrib_depth(-1.0f, 1.0f);
 
     return {
@@ -42,7 +42,7 @@ SnowSystem::SnowSystem(int numFlakes, int width, int height) : screenWidth(width
 void SnowSystem::update(double wind, const Display* display) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distrib_drift_rand(-0.1f, 0.1f);
+    std::uniform_real_distribution<float> distrib_drift_rand(-0.05f, 0.05f);  // Reduced random drift
 
     // Check if texture changed and unfreeze affected snowflakes
     bool textureChanged = display->hasTextureChanged();
@@ -72,10 +72,10 @@ void SnowSystem::update(double wind, const Display* display) {
         int prevY = static_cast<int>(snow.y);
         
         // Update position
-        snow.y += snow.speed;
+        snow.y += snow.speed * 0.7f;  // Slow down vertical movement
         float new_drift = snow.drift + distrib_drift_rand(gen);
-        snow.drift = std::max(-2.0f, std::min(2.0f, new_drift));  // Use consistent float types
-        snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 2.0f));  // Larger flakes are more affected by wind
+        snow.drift = std::max(-1.0f, std::min(1.0f, new_drift));  // Limit drift range
+        snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 3.0f));  // Reduced wind effect
 
         // Only check for collisions if snowflake is near the clock plane
         bool nearClockPlane = std::abs(snow.depth - CLOCK_PLANE_DEPTH) < DEPTH_COLLISION_THRESHOLD;
@@ -120,10 +120,10 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
               [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
 
     for (const auto& snow : snowflakesCopy) {
-        // Calculate size and opacity based on depth
-        float depthFactor = (snow.depth + 1.0f) * 0.5f;  // Convert -1..1 to 0..1
-        int scaledRadius = static_cast<int>(snow.radius * (0.5f + depthFactor));
-        Uint8 alpha = static_cast<Uint8>((0.3f + 0.7f * depthFactor) * snow.alpha * 255);
+        // Adjust size and opacity based on depth with softer scaling
+        float depthFactor = (snow.depth + 1.0f) * 0.5f;
+        int scaledRadius = static_cast<int>(snow.radius * (0.7f + depthFactor * 0.5f));  // Less dramatic size variation
+        Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow.alpha * 255);  // Softer opacity range
 
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
