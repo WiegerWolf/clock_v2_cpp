@@ -22,8 +22,8 @@ WeatherData WeatherAPI::fetchWeather() {
         return currentWeatherData;
     }
 
-    httplib::Client cli(WEATHER_API_URL_HOST, WEATHER_API_URL_PORT);
-    cli.set_connection_timeout(5); // 5 seconds timeout
+    httplib::SSLClient cli(WEATHER_API_URL_HOST);
+    cli.set_connection_timeout(5);
     
     auto res = cli.Get(WEATHER_API_URL_PATH);
     if (!res) {
@@ -34,14 +34,13 @@ WeatherData WeatherAPI::fetchWeather() {
     if (res->status == 200) {
         try {
             json data = json::parse(res->body);
-            currentWeatherData.temperature = data["current_weather"]["temperature"].get<double>();
-            currentWeatherData.weathercode = data["current_weather"]["weathercode"].get<int>();
-            currentWeatherData.windspeed = data["current_weather"]["windspeed"].get<double>();
+            auto current = data["current_weather"];
+            currentWeatherData.temperature = current["temperature"].get<double>();
+            currentWeatherData.weathercode = current["weathercode"].get<int>();
+            currentWeatherData.windspeed = current["windspeed"].get<double>();
             time(&lastUpdate);
-        } catch (const json::parse_error& e) {
-            std::cerr << "JSON parse error: " << e.what() << std::endl;
         } catch (const std::exception& e) {
-            std::cerr << "Error processing weather JSON: " << e.what() << std::endl;
+            std::cerr << "Error processing weather data: " << e.what() << std::endl;
         }
     } else {
         std::cerr << "HTTP weather request failed with status: " << res->status << std::endl;
