@@ -10,3 +10,6 @@ compiler.version=9
 CC=arm-linux-gnueabihf-gcc
 CXX=arm-linux-gnueabihf-g++
 LD=arm-linux-gnueabihf-ld
+[conf]
+tools.system.package_manager:mode=install
+tools.system.package_manager:sudo=True
