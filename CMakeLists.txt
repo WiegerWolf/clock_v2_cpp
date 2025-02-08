@@ -18,6 +18,7 @@ add_executable(${PROJECT_NAME}
     weather.cpp
     clothing_advice.cpp
     background_manager.cpp
+    constants.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} 

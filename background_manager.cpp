@@ -1,6 +1,7 @@
 // background_manager.cpp
 #include "background_manager.h"
 #include "config.h"
+#include "constants.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>

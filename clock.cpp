@@ -3,6 +3,7 @@
 #include "display.h"
 #include "snow_system.h"
 #include "weather_api.h"
+#include "constants.h"
 #include "background_manager.h"
 #include "config.h"
 #include "weather.h"
