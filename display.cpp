@@ -7,10 +7,12 @@
 #include <vector>
 #include <sstream>
 #include <climits>  // Add this line for INT_MAX
+#include <cstring>  // Add this for memset and memcpy
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), 
-    backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr) {
+    backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
+    textureChanged(false), previousTextPixels(nullptr) {
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
         std::cerr << "SDL_CreateRGBSurface failed: " << SDL_GetError() << std::endl;
@@ -38,6 +40,8 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     }
     texturePitch = width * 4; // 4 bytes per pixel (RGBA)
     textPixels = new Uint32[width * height];
+    previousTextPixels = new Uint32[width * height];
+    std::memset(previousTextPixels, 0, width * height * sizeof(Uint32));
 }
 
 Display::~Display() {
@@ -47,6 +51,7 @@ Display::~Display() {
     if (backgroundManager) delete backgroundManager;
     if (textCapture) SDL_DestroyTexture(textCapture);
     delete[] textPixels;
+    delete[] previousTextPixels;
 }
 
 int Display::calculateFontSize() {
@@ -239,6 +244,18 @@ void Display::updateTextCapture() {
                             textPixels, texturePitch) < 0) {
         std::cerr << "Failed to read pixels: " << SDL_GetError() << std::endl;
     }
+    checkTextureChange();
+}
+
+void Display::checkTextureChange() {
+    textureChanged = false;
+    for (int i = 0; i < sizeW * sizeH; i++) {
+        if (textPixels[i] != previousTextPixels[i]) {
+            textureChanged = true;
+            break;
+        }
+    }
+    std::memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
 }
 
 bool Display::isPixelOccupied(int x, int y) const {

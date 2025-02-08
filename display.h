@@ -23,6 +23,9 @@ public:
     void beginTextCapture();
     void endTextCapture();
 
+    bool hasTextureChanged() const { return textureChanged; }
+    void resetTextureChangeFlag() { textureChanged = false; }
+
     TTF_Font* fontLarge;
     TTF_Font* fontSmall;
     SDL_Renderer* renderer;
@@ -41,6 +44,10 @@ private:
     Uint32* textPixels;
     int texturePitch;
     SDL_Texture* mainTarget;  // Add this line to store the main render target
+
+    bool textureChanged;
+    Uint32* previousTextPixels;
+    void checkTextureChange();
 };
 
 #endif // DISPLAY_H

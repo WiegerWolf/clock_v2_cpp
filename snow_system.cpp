@@ -39,9 +39,22 @@ SnowSystem::SnowSystem(int numFlakes, int width, int height) : screenWidth(width
 void SnowSystem::update(double wind, const Display* display) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distrib_drift_rand(-0.1f, 0.1f);  // Changed to float
+    std::uniform_real_distribution<float> distrib_drift_rand(-0.1f, 0.1f);
+
+    // Check if texture changed and unfreeze affected snowflakes
+    bool textureChanged = display->hasTextureChanged();
 
     for (auto& snow : snowflakes) {
+        // If texture changed and snowflake is settled, check if it should be unfrozen
+        if (textureChanged && snow.settled) {
+            int currentX = static_cast<int>(snow.x);
+            int currentY = static_cast<int>(snow.y);
+            if (!display->isPixelOccupied(currentX, currentY + snow.radius)) {
+                snow.settled = false;
+                snow.settleTime = 0;
+            }
+        }
+
         if (snow.settled) {
             snow.settleTime++;
             if (snow.settleTime > SETTLE_TIMEOUT) {

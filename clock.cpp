@@ -197,5 +197,8 @@ void Clock::draw() {
     snow->update(currentWind, display);
     snow->draw(renderer);
     
+    // Reset the texture change flag after snow update
+    display->resetTextureChangeFlag();
+    
     SDL_RenderPresent(renderer);
 }
