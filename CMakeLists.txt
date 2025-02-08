@@ -1,21 +1,13 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.15) # Or your minimum required CMake version
 project(digital_clock_cpp)
+
+# Include Conan toolchain - this is crucial for Conan integration
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
 
 add_executable(digital_clock main.cpp clock.cpp display.cpp snow_system.cpp weather_api.cpp weather.cpp clothing_advice.cpp background_manager.cpp)
 
-# Find and link libraries - vcpkg integration handles this
-find_package(SDL2 REQUIRED)
-find_package(SDL2_image REQUIRED)
-find_package(SDL2_ttf REQUIRED)
-find_package(libcurl REQUIRED)
-find_package(nlohmann_json REQUIRED) # Might be found automatically as header-only
-find_package(cpp-httplib REQUIRED) # Might be found automatically as header-only
-
+# Link the libraries - Conan's CMakeDeps generator makes this easy
 target_link_libraries(digital_clock PRIVATE
-    SDL2::SDL2
-    SDL2_image::SDL2_image
-    SDL2_ttf::SDL2_ttf
-    libcurl::libcurl
-    nlohmann_json::nlohmann_json # If needed, usually header-only is fine
-    cpp-httplib::cpp-httplib # If needed, usually header-only is fine
+    ${CONAN_LIBS} # This variable contains all libraries from conanfile.txt
 )
