@@ -184,16 +184,9 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
 }
 
 void Display::clear() {
-    SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format, BLACK_COLOR.r, BLACK_COLOR.g, BLACK_COLOR.b));
-    backgroundManager->update(sizeW, sizeH);
-
-    SDL_Texture* screenTexture = SDL_CreateTextureFromSurface(renderer, screenSurface);
-    if (screenTexture) {
-        SDL_RenderCopy(renderer, screenTexture, NULL, NULL);
-        SDL_DestroyTexture(screenTexture);
-    }
-
-    backgroundManager->draw(renderer);
+    // Remove background management code, only handle text rendering
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
 }
 
 void Display::update() {

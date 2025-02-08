@@ -110,13 +110,13 @@ void Clock::update() {
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
-    double wind = 0.2 * sin(static_cast<double>(currentTime)); // Using ctime for timestamp
+    double wind = 0.2 * sin(static_cast<double>(currentTime));
 
     snow->update(wind);
-
-    WeatherData currentWeatherData = weatherAPI->fetchWeather();
+    backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     if (shouldUpdateAdvice()) {
+        WeatherData currentWeatherData = weatherAPI->fetchWeather();
         clothingAdvice = getClothingAdvice(
             currentWeatherData.temperature,
             currentWeatherData.weathercode,
@@ -126,8 +126,19 @@ void Clock::update() {
         );
         time(&lastAdviceUpdate);
     }
+}
 
-    display->clear();
+void Clock::draw() {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    
+    // 1. Draw background
+    backgroundManager->draw(renderer);
+
+    // 2. Draw all text elements
+    auto now = std::chrono::system_clock::now();
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    std::tm* now_tm = std::localtime(&currentTime);
 
     // Draw time
     std::stringstream timeStream;
@@ -150,6 +161,7 @@ void Clock::update() {
     );
 
     // Draw weather
+    WeatherData currentWeatherData = weatherAPI->fetchWeather();
     std::string weatherStr = getWeatherDescription(
         currentWeatherData.temperature,
         currentWeatherData.weathercode,
@@ -176,19 +188,7 @@ void Clock::update() {
         );
     }
 
-    snow->draw(renderer);
-    backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
-    
-    if (!backgroundManager->getError().empty()) {
-        std::cout << "Background error: " << backgroundManager->getError() << std::endl;
-    }
-}
-
-void Clock::draw() {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-    
-    backgroundManager->draw(renderer);
+    // 3. Draw snow on top
     snow->draw(renderer);
     
     SDL_RenderPresent(renderer);

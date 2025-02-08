@@ -171,7 +171,7 @@ void BackgroundManager::update(int width, int height) {
 
 void BackgroundManager::draw(SDL_Renderer* renderer) {
     std::lock_guard<std::mutex> lock(mutex);
-    SDL_RenderClear(renderer);  // Clear the renderer before drawing
+    // Remove SDL_RenderClear here since it's handled in Clock::draw
     if (currentImage) {
         SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, currentImage);
         if (texture) {
