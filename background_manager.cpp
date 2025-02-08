@@ -1,4 +1,5 @@
 // background_manager.cpp
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "background_manager.h"
 #include "config.h"
 #include "constants.h"
@@ -10,10 +11,11 @@
 #include <httplib.h>
 #include <SDL_image.h>
 #include <nlohmann/json.hpp>
+#include <thread>
 
 using json = nlohmann::json;
 
-BackgroundManager::BackgroundManager() : currentImage(nullptr), overlay(nullptr), lastUpdate(0), error("") {}
+BackgroundManager::BackgroundManager() : currentImage(nullptr), overlay(nullptr), lastUpdate(0), error(""), pendingImage(nullptr) {}
 
 BackgroundManager::~BackgroundManager() {
     if (currentImage) {
@@ -25,9 +27,23 @@ BackgroundManager::~BackgroundManager() {
 }
 
 std::string BackgroundManager::fetchImageUrl() {
-    httplib::Client cli(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT);
+    httplib::SSLClient cli(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT);
+    cli.set_follow_location(true);
+    cli.enable_server_certificate_verification(false);
+    
+    std::cout << "Fetching from: " << BACKGROUND_API_URL_HOST << BACKGROUND_API_URL_PATH << std::endl;
     auto res = cli.Get(BACKGROUND_API_URL_PATH);
-    if (res && res->status == 200) {  // Changed from status() to status
+    
+    if (!res) {
+        error = "Failed to get response";
+        std::cout << "HTTP request failed: no response" << std::endl;
+        return "";
+    }
+    
+    std::cout << "Status: " << res->status << std::endl;
+    std::cout << "Response body: " << res->body << std::endl;
+    
+    if (res->status == 200) {
         try {
             json data = json::parse(res->body);
             return data[0]["fullUrl"].get<std::string>();
@@ -39,7 +55,7 @@ std::string BackgroundManager::fetchImageUrl() {
             return "";
         }
     }
-    error = "HTTP request failed: " + std::to_string(res ? res->status : -1);  // Changed from status() to status
+    error = "HTTP request failed: " + std::to_string(res->status);
     return "";
 }
 
@@ -54,9 +70,37 @@ SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
 }
 
 SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int height) {
-    httplib::Client cli(url.substr(0, url.find("/", 8)).c_str()); // Extract host from URL
-    auto res = cli.Get(url.substr(url.find("/", 8)).c_str()); // Extract path from URL
-    if (res && res->status == 200) {  // Changed from status() to status
+    std::cout << "Loading image from URL: " << url << std::endl;
+    
+    // Parse URL properly - remove https:// prefix
+    std::string hostWithProto = url.substr(0, url.find("/", 8));
+    std::string host = hostWithProto.substr(hostWithProto.find("://") + 3);
+    std::string path = url.substr(url.find("/", 8));
+    
+    std::cout << "Host (cleaned): " << host << std::endl;
+    std::cout << "Path: " << path << std::endl;
+    
+    httplib::SSLClient cli(host);
+    cli.set_follow_location(true);
+    cli.enable_server_certificate_verification(false);
+    
+    // Set read timeout to avoid hanging
+    cli.set_read_timeout(5, 0); // 5 seconds timeout
+    cli.set_write_timeout(5, 0);
+    cli.set_connection_timeout(5, 0);
+    
+    auto res = cli.Get(path.c_str());
+    
+    if (!res) {
+        error = "Failed to get image response: " + std::string(httplib::to_string(res.error()));
+        std::cout << "Image HTTP request failed: " << error << std::endl;
+        return nullptr;
+    }
+    
+    std::cout << "Image response status: " << res->status << std::endl;
+    std::cout << "Image response size: " << res->body.size() << std::endl;
+    
+    if (res && res->status == 200) {
         SDL_RWops* rw = SDL_RWFromMem((void*)res->body.data(), res->body.size());
         if (!rw) {
             error = "SDL_RWFromMem failed: " + std::string(SDL_GetError());
@@ -83,29 +127,51 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
         overlay = createDarkeningOverlay(width, height);
         return scaledSurface;
     }
-    error = "HTTP image request failed: " + std::to_string(res ? res->status : -1);  // Changed from status() to status
+    error = "HTTP image request failed: " + std::to_string(res ? res->status : -1);
     return nullptr;
+}
+
+void BackgroundManager::loadImageAsync(const std::string& url, int width, int height) {
+    if (isLoading) return;
+    
+    isLoading = true;
+    std::thread([this, url, width, height]() {
+        SDL_Surface* newImage = loadImage(url, width, height);
+        if (newImage) {
+            std::lock_guard<std::mutex> lock(mutex);
+            pendingImage = newImage;
+        }
+        isLoading = false;
+    }).detach();
 }
 
 void BackgroundManager::update(int width, int height) {
     time_t currentTime;
     time(&currentTime);
-    if (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr) {
+    
+    // Handle pending image
+    if (pendingImage) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (currentImage) {
+            SDL_FreeSurface(currentImage);
+        }
+        currentImage = pendingImage;
+        pendingImage = nullptr;
+        lastUpdate = currentTime;
+    }
+    
+    // Check if we need to start loading a new image
+    if (!isLoading && (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
         std::string imageUrl = fetchImageUrl();
         if (!imageUrl.empty()) {
-            SDL_Surface* newImage = loadImage(imageUrl, width, height);
-            if (newImage) {
-                if (currentImage) {
-                    SDL_FreeSurface(currentImage);
-                }
-                currentImage = newImage;
-                lastUpdate = currentTime;
-            }
+            loadImageAsync(imageUrl, width, height);
         }
     }
 }
 
 void BackgroundManager::draw(SDL_Renderer* renderer) {
+    std::lock_guard<std::mutex> lock(mutex);
+    SDL_RenderClear(renderer);  // Clear the renderer before drawing
     if (currentImage) {
         SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, currentImage);
         if (texture) {

@@ -4,6 +4,9 @@
 
 #include <string>
 #include <SDL.h>
+#include <mutex>
+#include <thread>
+#include <atomic>
 
 class BackgroundManager {
 public:
@@ -17,11 +20,15 @@ private:
     std::string fetchImageUrl();
     SDL_Surface* createDarkeningOverlay(int width, int height);
     SDL_Surface* loadImage(const std::string& url, int width, int height);
+    void loadImageAsync(const std::string& url, int width, int height);
 
     SDL_Surface* currentImage;
     SDL_Surface* overlay;
     time_t lastUpdate;
     std::string error;
+    std::mutex mutex;
+    std::atomic<bool> isLoading{false};
+    SDL_Surface* pendingImage;
 };
 
 #endif // BACKGROUND_MANAGER_H

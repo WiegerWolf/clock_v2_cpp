@@ -177,8 +177,19 @@ void Clock::update() {
     }
 
     snow->draw(renderer);
+    backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
+    
+    if (!backgroundManager->getError().empty()) {
+        std::cout << "Background error: " << backgroundManager->getError() << std::endl;
+    }
 }
 
 void Clock::draw() {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    
+    backgroundManager->draw(renderer);
+    snow->draw(renderer);
+    
     SDL_RenderPresent(renderer);
 }
