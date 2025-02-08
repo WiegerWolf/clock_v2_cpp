@@ -1,5 +1,4 @@
 // background_manager.cpp
-#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "background_manager.h"
 #include "config.h"
 #include "constants.h"
