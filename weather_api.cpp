@@ -21,9 +21,9 @@ WeatherData WeatherAPI::fetchWeather() {
         return currentWeatherData;
     }
 
-    httplib::Client cli(WEATHER_API_URL_HOST, WEATHER_API_URL_PORT);
+    httplib::SSLClient cli(WEATHER_API_URL_HOST, WEATHER_API_URL_PORT);
     auto res = cli.Get(WEATHER_API_URL_PATH);
-    if (res && res->status() == 200) {
+    if (res && res->status == 200) {  // Changed from status() to status
         try {
             json data = json::parse(res->body);
             currentWeatherData.temperature = data["current_weather"]["temperature"].get<double>();
@@ -37,7 +37,7 @@ WeatherData WeatherAPI::fetchWeather() {
             std::cerr << "Error processing weather JSON: " << e.what() << std::endl;
         }
     } else {
-        std::cerr << "HTTP weather request failed: " << (res ? std::to_string(res->status()) : "No response") << std::endl;
+        std::cerr << "HTTP weather request failed: " << (res ? std::to_string(res->status) : "No response") << std::endl;  // Changed from status() to status
     }
     return currentWeatherData; // Return potentially outdated or default data on failure
 }

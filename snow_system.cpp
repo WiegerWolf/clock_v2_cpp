@@ -6,9 +6,9 @@
 Snowflake SnowSystem::createSnowflake(int width, int height) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<> distrib_pos_x(0.0f, static_cast<float>(width));
-    std::uniform_real_distribution<> distrib_speed(0.5f, 2.0f);
-    std::uniform_real_distribution<> distrib_drift(-0.2f, 0.2f);
+    std::uniform_real_distribution<float> distrib_pos_x(0.0f, static_cast<float>(width));
+    std::uniform_real_distribution<float> distrib_speed(0.5f, 2.0f);
+    std::uniform_real_distribution<float> distrib_drift(-0.2f, 0.2f);
     std::uniform_int_distribution<> distrib_radius(2, 4);
 
     return {
