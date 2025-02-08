@@ -4,6 +4,7 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include <vector> // Add this line
 #include <string>
 
 class BackgroundManager;

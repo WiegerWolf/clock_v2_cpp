@@ -8,6 +8,7 @@
 #include "weather.h"
 #include "clothing_advice.h"
 #include <SDL_ttf.h>
+#include <SDL_image.h>
 #include <iostream>
 #include <cmath>
 #include <ctime>
