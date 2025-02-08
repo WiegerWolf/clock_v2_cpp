@@ -26,7 +26,7 @@ BackgroundManager::~BackgroundManager() {
 std::string BackgroundManager::fetchImageUrl() {
     httplib::Client cli(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT);
     auto res = cli.Get(BACKGROUND_API_URL_PATH);
-    if (res && res->status() == 200) {
+    if (res && res->status == 200) {  // Changed from status() to status
         try {
             json data = json::parse(res->body);
             return data[0]["fullUrl"].get<std::string>();
@@ -37,10 +37,9 @@ std::string BackgroundManager::fetchImageUrl() {
             error = "Error processing JSON: " + std::string(e.what());
             return "";
         }
-    } else {
-        error = "HTTP request failed: " + std::to_string(res ? res->status() : -1);
-        return "";
     }
+    error = "HTTP request failed: " + std::to_string(res ? res->status : -1);  // Changed from status() to status
+    return "";
 }
 
 SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
@@ -56,7 +55,7 @@ SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
 SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int height) {
     httplib::Client cli(url.substr(0, url.find("/", 8)).c_str()); // Extract host from URL
     auto res = cli.Get(url.substr(url.find("/", 8)).c_str()); // Extract path from URL
-    if (res && res->status() == 200) {
+    if (res && res->status == 200) {  // Changed from status() to status
         SDL_RWops* rw = SDL_RWFromMem((void*)res->body.data(), res->body.size());
         if (!rw) {
             error = "SDL_RWFromMem failed: " + std::string(SDL_GetError());
@@ -82,10 +81,9 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
         SDL_FreeSurface(imageSurface);
         overlay = createDarkeningOverlay(width, height);
         return scaledSurface;
-    } else {
-        error = "HTTP image request failed: " + std::to_string(res ? res->status() : -1);
-        return nullptr;
     }
+    error = "HTTP image request failed: " + std::to_string(res ? res->status : -1);  // Changed from status() to status
+    return nullptr;
 }
 
 void BackgroundManager::update(int width, int height) {
