@@ -7,6 +7,9 @@
 
 struct Snowflake {
     float x, y, speed, drift;
+    float alpha;        // Opacity
+    float angle;        // Current rotation angle
+    float angleVel;     // Angular velocity
     int radius;
 };
 
