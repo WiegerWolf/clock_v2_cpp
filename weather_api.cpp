@@ -26,7 +26,7 @@ WeatherData WeatherAPI::fetchWeather() {
     
     auto res = cli.Get(WEATHER_API_URL_PATH);
     if (!res) {
-        std::cerr << "HTTP connection failed: " << cli.get_last_error() << std::endl;
+        std::cerr << "HTTP connection failed" << std::endl;
         return currentWeatherData;
     }
     

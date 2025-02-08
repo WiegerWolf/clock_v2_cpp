@@ -71,7 +71,7 @@ std::string getClothingAdvice(double temperature, int weathercode, double windsp
     };
     auto res = cli.Post("/v1/chat/completions", headers, payload.dump(), "application/json");
 
-    if (res && res->status() == 200) {
+    if (res && res->status == 200) {  // Changed from status() to status
         try {
             json data = json::parse(res->body);
             if (data.contains("error")) {
@@ -88,7 +88,7 @@ std::string getClothingAdvice(double temperature, int weathercode, double windsp
             std::cerr << "Error processing clothing advice JSON: " << e.what() << std::endl;
         }
     } else {
-        std::cerr << "API request failed: " << (res ? std::to_string(res->status()) : "No response") << std::endl;
+        std::cerr << "API request failed: " << (res ? std::to_string(res->status) : "No response") << std::endl;  // Changed from status() to status
     }
 
     return getBasicAdvice(temperature);
