@@ -3,7 +3,8 @@ from conan.tools.cmake import CMakeToolchain, CMakeDeps, cmake_layout
 
 class MyProject(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
-    generators = "CMakeToolchain", "CMakeDeps"
+    # Remove CMakeToolchain from generators list
+    generators = "CMakeDeps"  # Keep only CMakeDeps here
 
     def requirements(self):
         self.requires("sdl/2.28.3")
@@ -16,7 +17,7 @@ class MyProject(ConanFile):
     def layout(self):
         cmake_layout(self)
 
-    # Optional: Add cross-compilation specific configuration
+    #  Keep CMakeToolchain instantiation and generation in generate()
     def generate(self):
         tc = CMakeToolchain(self)
         if self.settings.arch == "armv7hf":
