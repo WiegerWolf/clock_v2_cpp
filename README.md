@@ -29,7 +29,6 @@ make
 Dependencies:
 
 ```bash
-sudo dpkg --add-architecture armhf
 sudo sh -c 'echo "deb [arch=armhf] http://ports.ubuntu.com/ $(lsb_release -cs) main restricted universe multiverse" >> /etc/apt/sources.list.d/armhf.list'
 sudo apt-get update
 sudo apt-get install crossbuild-essential-armhf
