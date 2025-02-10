@@ -26,6 +26,7 @@ conan install . --build=missing -of=build
 3. Configure CMake:
 ```bash
 cd build
+source conanbuild.sh 
 cmake .. -DCMAKE_BUILD_TYPE=Release
 ```
 
