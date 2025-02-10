@@ -77,11 +77,13 @@ void SnowSystem::update(double wind, const Display* display) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
     static std::uniform_real_distribution<float> distrib_drift_rand(-0.05f, 0.05f);
-
-    bool textureChanged = display->hasTextureChanged();
-    const float windEffect = static_cast<float>(wind) * 0.3f; // Reduced wind multiplier
-
-    for (auto& snow : snowflakes) {
+    
+    const float windEffect = static_cast<float>(wind) * 0.3f;
+    const bool textureChanged = display->hasTextureChanged();
+    
+    #pragma omp parallel for if(snowflakes.size() > 1000)
+    for (size_t i = 0; i < snowflakes.size(); ++i) {
+        auto& snow = snowflakes[i];
         if (textureChanged && snow.settled) {
             int currentX = static_cast<int>(snow.x);
             int currentY = static_cast<int>(snow.y);
@@ -89,6 +91,7 @@ void SnowSystem::update(double wind, const Display* display) {
                 snow.settled = false;
                 snow.settleTime = 0;
             }
+            continue;
         }
 
         if (snow.settled) {
@@ -100,20 +103,22 @@ void SnowSystem::update(double wind, const Display* display) {
             continue;
         }
 
-        int prevY = static_cast<int>(snow.y);
-        
-        // Update position with reduced calculations
-        snow.y += snow.speed * 0.7f;
-        snow.drift = std::clamp(snow.drift + distrib_drift_rand(gen), -1.0f, 1.0f);
-        snow.x += snow.drift + (windEffect * snow.radius);
-
-        bool nearClockPlane = std::abs(snow.depth - CLOCK_PLANE_DEPTH) < DEPTH_COLLISION_THRESHOLD;
-        
-        if (nearClockPlane) {
+        // Fast-path for snowflakes far from the clock plane
+        if (std::abs(snow.depth - CLOCK_PLANE_DEPTH) > DEPTH_COLLISION_THRESHOLD) {
+            snow.y += snow.speed * 0.7f;
+            snow.x += snow.drift + windEffect;
+            snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);
+        } else {
+            int prevY = static_cast<int>(snow.y);
+            snow.y += snow.speed * 0.7f;
+            snow.drift = std::clamp(snow.drift + distrib_drift_rand(gen), -1.0f, 1.0f);
+            snow.x += snow.drift + (windEffect * snow.radius);
+            
             int currentX = static_cast<int>(snow.x);
             int currentY = static_cast<int>(snow.y);
             
-            for (int checkY = prevY; checkY <= currentY; checkY += snow.radius) {
+            // Use a larger step for collision checks
+            for (int checkY = prevY; checkY <= currentY; checkY += snow.radius * 2) {
                 if (display->isPixelOccupied(currentX, checkY + snow.radius)) {
                     snow.y = checkY;
                     snow.settled = true;
@@ -122,15 +127,12 @@ void SnowSystem::update(double wind, const Display* display) {
                     break;
                 }
             }
+            snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);
         }
-
-        // Simplified angle update
-        snow.angle = fmod(snow.angle + snow.angleVel, 360.0f);
 
         // Screen wrapping with reduced branching
         snow.x = snow.x < -10 ? screenWidth + 10 : (snow.x > screenWidth + 10 ? -10 : snow.x);
-
-        // Reset when below screen
+        
         if (snow.y > screenHeight + 10) {
             snow = createSnowflake(screenWidth, screenHeight);
             snow.y = -10;
@@ -139,45 +141,56 @@ void SnowSystem::update(double wind, const Display* display) {
 }
 
 void SnowSystem::draw(SDL_Renderer* renderer) {
-    // Sort snowflakes by depth - only if needed for visual accuracy
-    auto snowflakesCopy = snowflakes;
-    std::sort(snowflakesCopy.begin(), snowflakesCopy.end(), 
-              [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+    // Pre-sort snowflakes by radius to minimize state changes
+    static std::vector<const Snowflake*> sortedFlakes;
+    sortedFlakes.clear();
+    sortedFlakes.reserve(snowflakes.size());
+    
+    for (const auto& flake : snowflakes) {
+        sortedFlakes.push_back(&flake);
+    }
+    
+    std::sort(sortedFlakes.begin(), sortedFlakes.end(), 
+              [](const Snowflake* a, const Snowflake* b) {
+                  return a->radius < b->radius || (a->radius == b->radius && a->depth < b->depth);
+              });
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     
-    // Batch similar snowflakes together
-    for (int r = 1; r <= 3; r++) {
-        const auto& circlePoints = preCalculatedCircles[r-1].points;
-        std::vector<SDL_Point> batchedPoints;
-        batchedPoints.reserve(snowflakesCopy.size() * circlePoints.size());
-        
-        for (const auto& snow : snowflakesCopy) {
-            if (snow.radius != r) continue;
+    // Batch rendering by radius
+    int currentRadius = -1;
+    std::vector<SDL_Point> batchPoints;
+    batchPoints.reserve(sortedFlakes.size() * 9);  // Approximate max points per snowflake
+    
+    for (const Snowflake* snow : sortedFlakes) {
+        if (snow->radius != currentRadius) {
+            if (!batchPoints.empty()) {
+                SDL_RenderDrawPoints(renderer, batchPoints.data(), batchPoints.size());
+                batchPoints.clear();
+            }
+            currentRadius = snow->radius;
+            const auto& circlePoints = preCalculatedCircles[currentRadius-1].points;
             
-            float depthFactor = (snow.depth + 1.0f) * 0.5f;
-            Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow.alpha * 255);
+            float depthFactor = (snow->depth + 1.0f) * 0.5f;
+            Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow->alpha * 255);
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
-            
-            int centerX = static_cast<int>(snow.x);
-            int centerY = static_cast<int>(snow.y);
-            
-            // Add all points for this snowflake to the batch
-            for (const auto& p : circlePoints) {
-                batchedPoints.push_back({centerX + p.x, centerY + p.y});
-            }
-            
-            // Draw batch if it's getting too large
-            if (batchedPoints.size() >= 1000) {
-                SDL_RenderDrawPoints(renderer, batchedPoints.data(), batchedPoints.size());
-                batchedPoints.clear();
-            }
         }
         
-        // Draw remaining points in batch
-        if (!batchedPoints.empty()) {
-            SDL_RenderDrawPoints(renderer, batchedPoints.data(), batchedPoints.size());
+        int centerX = static_cast<int>(snow->x);
+        int centerY = static_cast<int>(snow->y);
+        
+        for (const auto& p : preCalculatedCircles[currentRadius-1].points) {
+            batchPoints.push_back({centerX + p.x, centerY + p.y});
         }
+        
+        if (batchPoints.size() >= 1000) {
+            SDL_RenderDrawPoints(renderer, batchPoints.data(), batchPoints.size());
+            batchPoints.clear();
+        }
+    }
+    
+    if (!batchPoints.empty()) {
+        SDL_RenderDrawPoints(renderer, batchPoints.data(), batchPoints.size());
     }
     
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);

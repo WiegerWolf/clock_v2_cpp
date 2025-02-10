@@ -362,15 +362,9 @@ void Display::updateTextCapture() {
     }
     lastCheckTime = currentTime;
 
-    // Ensure textCapture exists
-    if (!textCapture) {
-        std::cerr << "textCapture is null in updateTextCapture" << std::endl;
-        return;
-    }
-
-    // Use streaming texture access for faster pixel operations
-    void* pixels = nullptr;
-    int pitch = 0;
+    // Use direct pixel access for better performance
+    void* pixels;
+    int pitch;
     if (SDL_LockTexture(textCapture, NULL, &pixels, &pitch) < 0) {
         std::cerr << "Failed to lock texture: " << SDL_GetError() << std::endl;
         return;
@@ -378,29 +372,40 @@ void Display::updateTextCapture() {
 
     if (pixels) {
         size_t size = sizeW * sizeH * sizeof(Uint32);
-        memcpy(textPixels, pixels, size);
+        #pragma omp parallel for if(size > 1024*1024)
+        for (int y = 0; y < sizeH; y++) {
+            memcpy(
+                static_cast<Uint32*>(textPixels) + y * sizeW,
+                static_cast<Uint8*>(pixels) + y * pitch,
+                sizeW * sizeof(Uint32)
+            );
+        }
         SDL_UnlockTexture(textCapture);
         checkTextureChange();
     } else {
         SDL_UnlockTexture(textCapture);
-        std::cerr << "No pixels available in locked texture" << std::endl;
     }
 }
 
 void Display::checkTextureChange() {
     textureChanged = false;
     
-    // Compare in chunks of 64 bytes for better performance
+    // Compare in chunks of 64 bytes for better cache utilization
     const uint64_t* curr = reinterpret_cast<const uint64_t*>(textPixels);
     const uint64_t* prev = reinterpret_cast<const uint64_t*>(previousTextPixels);
     const size_t numWords = (sizeW * sizeH * sizeof(Uint32)) / sizeof(uint64_t);
     
-    // Fast path: compare 64 bits at a time
-    for (size_t i = 0; i < numWords; i++) {
-        if (curr[i] != prev[i]) {
-            textureChanged = true;
-            break;
-        }
+    #pragma omp parallel for reduction(||:textureChanged)
+    for (size_t i = 0; i < numWords; i += 8) {
+        textureChanged = textureChanged || 
+            curr[i] != prev[i] ||
+            curr[i+1] != prev[i+1] ||
+            curr[i+2] != prev[i+2] ||
+            curr[i+3] != prev[i+3] ||
+            curr[i+4] != prev[i+4] ||
+            curr[i+5] != prev[i+5] ||
+            curr[i+6] != prev[i+6] ||
+            curr[i+7] != prev[i+7];
     }
     
     if (textureChanged) {
@@ -411,6 +416,5 @@ void Display::checkTextureChange() {
 bool Display::isPixelOccupied(int x, int y) const {
     if (x < 0 || x >= sizeW || y < 0 || y >= sizeH) return false;
     Uint32 pixel = textPixels[y * sizeW + x];
-    Uint8 alpha = (pixel & 0xFF000000) >> 24;
-    return alpha > 50; // Consider pixels with alpha > 50 as solid
+    return (pixel & 0xFF000000) > 0x32000000; // Alpha > 50
 }

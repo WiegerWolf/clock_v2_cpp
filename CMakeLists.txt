@@ -3,6 +3,9 @@ include(FetchContent)
 
 project(digital_clock)
 
+# Add compiler flags for optimization and profiling
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -pg -g")
+
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
 find_package(SDL2_ttf REQUIRED)
