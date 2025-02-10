@@ -8,7 +8,6 @@
 #include <sstream>
 #include <climits>  // Add this line for INT_MAX
 #include <cstring>  // Add this for memset and memcpy
-#include <SDL2/SDL_gpu.h>
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), 
