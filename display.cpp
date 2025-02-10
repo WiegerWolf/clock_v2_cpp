@@ -56,19 +56,22 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     std::memset(textPixels, 0, width * height * sizeof(Uint32));
     std::memset(previousTextPixels, 0, width * height * sizeof(Uint32));
 
+    // Create text capture texture with proper streaming access
     textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                  SDL_TEXTUREACCESS_TARGET | SDL_TEXTUREACCESS_STREAMING,
+                                  SDL_TEXTUREACCESS_STREAMING,  // Remove SDL_TEXTUREACCESS_TARGET
                                   width, height);
     if (!textCapture) {
         cleanup();
         throw std::runtime_error("Failed to create text capture texture: " + std::string(SDL_GetError()));
     }
 
-    // Initialize textCapture with transparency
-    SDL_SetRenderTarget(renderer, textCapture);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-    SDL_RenderClear(renderer);
-    SDL_SetRenderTarget(renderer, mainTarget);
+    // Initialize textCapture with transparency using the proper method for streaming textures
+    void* pixels;
+    int pitch;
+    if (SDL_LockTexture(textCapture, nullptr, &pixels, &pitch) == 0) {
+        std::memset(pixels, 0, height * pitch);
+        SDL_UnlockTexture(textCapture);
+    }
 }
 
 void Display::cleanup() {
