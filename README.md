@@ -18,18 +18,14 @@ sudo apt-get install -y libx11-xcb-dev libfontenc-dev libxaw7-dev libxkbfile-dev
 
 ## Build Steps
 
-1. Create and enter build directory:
-```bash
-mkdir build && cd build
-```
-
 2. Install dependencies using Conan:
 ```bash
-conan install .. --build=missing -of=build
+conan install . --build=missing -of=build
 ```
 
 3. Configure CMake:
 ```bash
+cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 ```
 
