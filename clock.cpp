@@ -59,7 +59,7 @@ bool Clock::initialize() {
         return false;
     }
 
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE);
     if (!renderer) {
         std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
         SDL_DestroyWindow(window);
@@ -68,6 +68,12 @@ bool Clock::initialize() {
         SDL_Quit();
         return false;
     }
+
+    // Enable bilinear filtering for better scaling
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+    
+    // Set device scale for Raspberry Pi
+    SDL_RenderSetScale(renderer, 1.0f, 1.0f);
 
     display = new Display(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
     snow = new SnowSystem(NUM_SNOWFLAKES, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -83,11 +89,22 @@ void Clock::run() {
         return;
     }
 
+    Uint32 frameStart;
+    int frameTime;
+    const int TARGET_FRAME_TIME = 1000 / 60;  // 60 FPS in milliseconds
+
     while (running) {
+        frameStart = SDL_GetTicks();
+
         handleEvents();
         update();
         draw();
-        SDL_Delay(16); // ~60 FPS
+
+        // Proper frame timing
+        frameTime = SDL_GetTicks() - frameStart;
+        if (frameTime < TARGET_FRAME_TIME) {
+            SDL_Delay(TARGET_FRAME_TIME - frameTime);
+        }
     }
 }
 

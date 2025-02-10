@@ -243,6 +243,7 @@ void Display::cleanupOldCachedTextures(Uint32 currentTime) {
 }
 
 void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY) {
+    static SDL_Texture* batchTexture = nullptr;
     SDL_Rect textRect;
     SDL_Texture* textTexture = getCachedTexture(text, font, color, textRect);
     if (!textTexture) return;
@@ -250,15 +251,17 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
     textRect.x = centerX - textRect.w / 2;
     textRect.y = centerY - textRect.h / 2;
 
-    SDL_Texture* currentTarget = SDL_GetRenderTarget(renderer);
-    
-    SDL_SetRenderTarget(renderer, textCapture);
+    // Draw directly to current target to reduce switches
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-    
+
+    // Update collision texture in background
+    if (!batchTexture) {
+        batchTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                       SDL_TEXTUREACCESS_TARGET, sizeW, sizeH);
+    }
+    SDL_SetRenderTarget(renderer, batchTexture);
+    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
     SDL_SetRenderTarget(renderer, mainTarget);
-    SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-    
-    SDL_SetRenderTarget(renderer, currentTarget);
 }
 
 void Display::clear() {
@@ -272,17 +275,13 @@ void Display::update() {
 }
 
 void Display::beginTextCapture() {
-    // Store current render target and switch to text capture
-    mainTarget = SDL_GetRenderTarget(renderer);
     SDL_SetRenderTarget(renderer, textCapture);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
 }
 
 void Display::endTextCapture() {
-    // Capture the current text state
     updateTextCapture();
-    // Switch back to main render target
     SDL_SetRenderTarget(renderer, mainTarget);
 }
 
@@ -290,16 +289,17 @@ void Display::updateTextCapture() {
     static Uint32 lastCheckTime = 0;
     Uint32 currentTime = SDL_GetTicks();
     
-    // Only check for changes every 16ms (60fps)
-    if (currentTime - lastCheckTime < 16) {
+    // Only check for texture changes every 32ms (30fps is enough for collision detection)
+    if (currentTime - lastCheckTime < 32) {
         return;
     }
     lastCheckTime = currentTime;
 
+    // Use streaming texture access for faster pixel operations
     void* pixels;
     int pitch;
     SDL_LockTexture(textCapture, NULL, &pixels, &pitch);
-    std::memcpy(textPixels, pixels, sizeW * sizeH * sizeof(Uint32));
+    memcpy(textPixels, pixels, sizeW * sizeH * sizeof(Uint32));
     SDL_UnlockTexture(textCapture);
     
     checkTextureChange();
@@ -307,10 +307,22 @@ void Display::updateTextCapture() {
 
 void Display::checkTextureChange() {
     textureChanged = false;
-    // Use SIMD or optimized memory comparison if available
-    if (memcmp(textPixels, previousTextPixels, sizeW * sizeH * sizeof(Uint32)) != 0) {
-        textureChanged = true;
-        std::memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
+    
+    // Compare in chunks of 64 bytes for better performance
+    const uint64_t* curr = reinterpret_cast<const uint64_t*>(textPixels);
+    const uint64_t* prev = reinterpret_cast<const uint64_t*>(previousTextPixels);
+    const size_t numWords = (sizeW * sizeH * sizeof(Uint32)) / sizeof(uint64_t);
+    
+    // Fast path: compare 64 bits at a time
+    for (size_t i = 0; i < numWords; i++) {
+        if (curr[i] != prev[i]) {
+            textureChanged = true;
+            break;
+        }
+    }
+    
+    if (textureChanged) {
+        memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
     }
 }
 
