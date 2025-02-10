@@ -8,6 +8,7 @@
 #include <sstream>
 #include <climits>  // Add this line for INT_MAX
 #include <cstring>  // Add this for memset and memcpy
+#include <SDL2/SDL_gpu.h>
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), 
@@ -34,7 +35,8 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     // Create target textures
     mainTarget = SDL_GetRenderTarget(renderer);
     textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                  SDL_TEXTUREACCESS_TARGET, width, height);
+                                  SDL_TEXTUREACCESS_TARGET | SDL_TEXTUREACCESS_STREAMING,
+                                  width, height);
     if (!textCapture) {
         std::cerr << "Failed to create text capture texture: " << SDL_GetError() << std::endl;
     }
@@ -45,6 +47,11 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
 }
 
 Display::~Display() {
+    for (auto& pair : textureCache) {
+        if (pair.second.texture) {
+            SDL_DestroyTexture(pair.second.texture);
+        }
+    }
     if (fontLarge) TTF_CloseFont(fontLarge);
     if (fontSmall) TTF_CloseFont(fontSmall);
     if (screenSurface) SDL_FreeSurface(screenSurface);
@@ -176,41 +183,82 @@ void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_C
     TTF_CloseFont(finalFont);
 }
 
-void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY) {
+SDL_Texture* Display::getCachedTexture(const std::string& text, TTF_Font* font, SDL_Color color, SDL_Rect& outRect) {
+    Uint32 currentTime = SDL_GetTicks();
+    
+    // Create a unique key for this text/font combination
+    std::string key = text + "_" + std::to_string(TTF_FontHeight(font));
+    
+    // Check if we have a cached version
+    auto it = textureCache.find(key);
+    if (it != textureCache.end()) {
+        it->second.lastUsed = currentTime;
+        outRect = it->second.rect;
+        return it->second.texture;
+    }
+    
+    // Create new texture
     SDL_Surface* textSurface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
-    if (!textSurface) {
-        std::cerr << "TTF_RenderUTF8_Blended failed: " << TTF_GetError() << std::endl;
-        return;
-    }
-    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    if (!textTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed: " << SDL_GetError() << std::endl;
+    if (!textSurface) return nullptr;
+    
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    if (!texture) {
         SDL_FreeSurface(textSurface);
-        return;
+        return nullptr;
     }
+    
+    // Cache the new texture
+    TextureCache cache;
+    cache.texture = texture;
+    cache.rect = {0, 0, textSurface->w, textSurface->h};
+    cache.text = text;
+    cache.fontSize = TTF_FontHeight(font);
+    cache.lastUsed = currentTime;
+    
+    outRect = cache.rect;
+    
+    // Clean up old textures if cache is too large
+    if (textureCache.size() >= MAX_CACHE_SIZE) {
+        cleanupOldCachedTextures(currentTime);
+    }
+    
+    textureCache[key] = cache;
+    SDL_FreeSurface(textSurface);
+    return texture;
+}
 
+void Display::cleanupOldCachedTextures(Uint32 currentTime) {
+    std::vector<std::string> keysToRemove;
+    
+    for (const auto& pair : textureCache) {
+        if (currentTime - pair.second.lastUsed > TEXTURE_CACHE_LIFETIME) {
+            keysToRemove.push_back(pair.first);
+        }
+    }
+    
+    for (const auto& key : keysToRemove) {
+        SDL_DestroyTexture(textureCache[key].texture);
+        textureCache.erase(key);
+    }
+}
+
+void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY) {
     SDL_Rect textRect;
-    textRect.w = textSurface->w;
-    textRect.h = textSurface->h;
+    SDL_Texture* textTexture = getCachedTexture(text, font, color, textRect);
+    if (!textTexture) return;
+
     textRect.x = centerX - textRect.w / 2;
     textRect.y = centerY - textRect.h / 2;
 
-    // Render to both textures
     SDL_Texture* currentTarget = SDL_GetRenderTarget(renderer);
     
-    // Render to collision texture
     SDL_SetRenderTarget(renderer, textCapture);
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
     
-    // Render to screen
     SDL_SetRenderTarget(renderer, mainTarget);
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
     
-    // Restore original target
     SDL_SetRenderTarget(renderer, currentTarget);
-
-    SDL_DestroyTexture(textTexture);
-    SDL_FreeSurface(textSurface);
 }
 
 void Display::clear() {
@@ -239,23 +287,31 @@ void Display::endTextCapture() {
 }
 
 void Display::updateTextCapture() {
-    SDL_Rect rect = {0, 0, sizeW, sizeH};
-    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_RGBA8888,
-                            textPixels, texturePitch) < 0) {
-        std::cerr << "Failed to read pixels: " << SDL_GetError() << std::endl;
+    static Uint32 lastCheckTime = 0;
+    Uint32 currentTime = SDL_GetTicks();
+    
+    // Only check for changes every 16ms (60fps)
+    if (currentTime - lastCheckTime < 16) {
+        return;
     }
+    lastCheckTime = currentTime;
+
+    void* pixels;
+    int pitch;
+    SDL_LockTexture(textCapture, NULL, &pixels, &pitch);
+    std::memcpy(textPixels, pixels, sizeW * sizeH * sizeof(Uint32));
+    SDL_UnlockTexture(textCapture);
+    
     checkTextureChange();
 }
 
 void Display::checkTextureChange() {
     textureChanged = false;
-    for (int i = 0; i < sizeW * sizeH; i++) {
-        if (textPixels[i] != previousTextPixels[i]) {
-            textureChanged = true;
-            break;
-        }
+    // Use SIMD or optimized memory comparison if available
+    if (memcmp(textPixels, previousTextPixels, sizeW * sizeH * sizeof(Uint32)) != 0) {
+        textureChanged = true;
+        std::memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
     }
-    std::memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
 }
 
 bool Display::isPixelOccupied(int x, int y) const {

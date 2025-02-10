@@ -14,7 +14,10 @@
 
 using json = nlohmann::json;
 
-BackgroundManager::BackgroundManager() : currentImage(nullptr), overlay(nullptr), lastUpdate(0), error(""), pendingImage(nullptr) {}
+BackgroundManager::BackgroundManager() 
+    : currentImage(nullptr), overlay(nullptr), currentTexture(nullptr), 
+    overlayTexture(nullptr), lastUpdate(0), error(""), pendingImage(nullptr),
+    texturesNeedUpdate(true) {}
 
 BackgroundManager::~BackgroundManager() {
     if (currentImage) {
@@ -22,6 +25,12 @@ BackgroundManager::~BackgroundManager() {
     }
     if (overlay) {
         SDL_FreeSurface(overlay);
+    }
+    if (currentTexture) {
+        SDL_DestroyTexture(currentTexture);
+    }
+    if (overlayTexture) {
+        SDL_DestroyTexture(overlayTexture);
     }
 }
 
@@ -123,6 +132,7 @@ void BackgroundManager::loadImageAsync(const std::string& url, int width, int he
         if (newImage) {
             std::lock_guard<std::mutex> lock(mutex);
             pendingImage = newImage;
+            texturesNeedUpdate = true;
         }
         isLoading = false;
     }).detach();
@@ -141,6 +151,7 @@ void BackgroundManager::update(int width, int height) {
         currentImage = pendingImage;
         pendingImage = nullptr;
         lastUpdate = currentTime;
+        texturesNeedUpdate = true;
     }
     
     // Check if we need to start loading a new image
@@ -152,25 +163,34 @@ void BackgroundManager::update(int width, int height) {
     }
 }
 
+void BackgroundManager::createTextures(SDL_Renderer* renderer) {
+    if (currentImage && texturesNeedUpdate) {
+        if (currentTexture) {
+            SDL_DestroyTexture(currentTexture);
+        }
+        currentTexture = SDL_CreateTextureFromSurface(renderer, currentImage);
+        
+        if (overlay) {
+            if (overlayTexture) {
+                SDL_DestroyTexture(overlayTexture);
+            }
+            overlayTexture = SDL_CreateTextureFromSurface(renderer, overlay);
+        }
+        
+        texturesNeedUpdate = false;
+    }
+}
+
 void BackgroundManager::draw(SDL_Renderer* renderer) {
     std::lock_guard<std::mutex> lock(mutex);
-    // Remove SDL_RenderClear here since it's handled in Clock::draw
-    if (currentImage) {
-        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, currentImage);
-        if (texture) {
-            SDL_RenderCopy(renderer, texture, NULL, NULL);
-            SDL_DestroyTexture(texture);
-        } else {
-            error = "SDL_CreateTextureFromSurface failed: " + std::string(SDL_GetError());
-        }
+    
+    createTextures(renderer);
+    
+    if (currentTexture) {
+        SDL_RenderCopy(renderer, currentTexture, NULL, NULL);
     }
-    if (overlay) {
-        SDL_Texture* overlayTexture = SDL_CreateTextureFromSurface(renderer, overlay);
-        if (overlayTexture) {
-            SDL_RenderCopy(renderer, overlayTexture, NULL, NULL);
-            SDL_DestroyTexture(overlayTexture);
-        } else {
-            error = "SDL_CreateTextureFromSurface (overlay) failed: " + std::string(SDL_GetError());
-        }
+    
+    if (overlayTexture) {
+        SDL_RenderCopy(renderer, overlayTexture, NULL, NULL);
     }
 }

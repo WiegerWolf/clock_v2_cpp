@@ -28,6 +28,7 @@ public:
 private:
     Snowflake createSnowflake(int screenWidth, int screenHeight);
     std::vector<Snowflake> snowflakes;
+    std::vector<SDL_Point> batchedPoints;
     int screenWidth, screenHeight;
     static const int SETTLE_TIMEOUT = 1000; // Time before settled snow disappears
     static constexpr float CLOCK_PLANE_DEPTH = 0.0f;

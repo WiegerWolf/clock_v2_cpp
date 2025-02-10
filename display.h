@@ -4,10 +4,19 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <vector> // Add this line
+#include <vector>
 #include <string>
+#include <unordered_map>
 
 class BackgroundManager;
+
+struct TextureCache {
+    SDL_Texture* texture;
+    SDL_Rect rect;
+    std::string text;
+    int fontSize;
+    Uint32 lastUsed;
+};
 
 class Display {
 public:
@@ -25,6 +34,7 @@ public:
 
     bool hasTextureChanged() const { return textureChanged; }
     void resetTextureChangeFlag() { textureChanged = false; }
+    void cleanupOldCachedTextures(Uint32 currentTime);
 
     TTF_Font* fontLarge;
     TTF_Font* fontSmall;
@@ -33,6 +43,9 @@ public:
     BackgroundManager* backgroundManager;
 
 private:
+    static const Uint32 TEXTURE_CACHE_LIFETIME = 5000; // 5 seconds
+    static const size_t MAX_CACHE_SIZE = 50;
+
     int sizeW, sizeH;
     int calculateFontSize();
     std::vector<std::string> wrapText(const std::string& text, TTF_Font* font, int maxWidth);
@@ -43,11 +56,14 @@ private:
     void updateTextCapture();
     Uint32* textPixels;
     int texturePitch;
-    SDL_Texture* mainTarget;  // Add this line to store the main render target
+    SDL_Texture* mainTarget;
 
     bool textureChanged;
     Uint32* previousTextPixels;
     void checkTextureChange();
+
+    std::unordered_map<std::string, TextureCache> textureCache;
+    SDL_Texture* getCachedTexture(const std::string& text, TTF_Font* font, SDL_Color color, SDL_Rect& outRect);
 };
 
 #endif // DISPLAY_H
