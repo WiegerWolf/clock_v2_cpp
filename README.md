@@ -2,9 +2,8 @@
 
 ## Prerequisites
 - CMake (3.15 or higher)
-- Conan package manager
 - C++ compiler
-- X11 development libraries (on Ubuntu/Debian):
+- Development libraries (on Ubuntu/Debian):
 ```bash
 sudo apt-get install -y libx11-xcb-dev libfontenc-dev libxaw7-dev libxkbfile-dev \
   libxmu-dev libxmuu-dev libxpm-dev libxres-dev libxcb-glx0-dev \
@@ -19,24 +18,8 @@ sudo apt-get install -y libx11-xcb-dev libfontenc-dev libxaw7-dev libxkbfile-dev
 
 ## Build Steps
 
-2. Install dependencies using Conan:
-```bash
-conan install . --build=missing -of=build
-```
-
-3. Configure CMake:
 ```bash
 cd build
-source conanbuild.sh 
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake
+cmake .. 
+make
 ```
-
-4. Build the project:
-```bash
-cmake --build .
-```
-
-## Notes
-- Make sure your `conanfile.txt` or `conanfile.py` is properly configured
-- For development, you can use Debug build type instead of Release
-- Run `conan profile detect` if you haven't set up a Conan profile yet
