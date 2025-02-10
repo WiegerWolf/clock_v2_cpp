@@ -43,6 +43,7 @@ public:
     BackgroundManager* backgroundManager;
 
 private:
+    void cleanup();  // Add cleanup method declaration
     static const Uint32 TEXTURE_CACHE_LIFETIME = 5000; // 5 seconds
     static const size_t MAX_CACHE_SIZE = 50;
 
