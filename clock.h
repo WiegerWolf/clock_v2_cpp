@@ -34,6 +34,7 @@ private:
     bool shouldUpdateAdvice();
     void update();
     void draw();
+    void cleanup();  // Add cleanup method
 };
 
 #endif // CLOCK_H

@@ -12,33 +12,43 @@
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), 
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
-    textureChanged(false), previousTextPixels(nullptr) {
+    textureChanged(false), previousTextPixels(nullptr), mainTarget(nullptr), screenSurface(nullptr) {
+    
+    if (!renderer) {
+        throw std::runtime_error("Null renderer passed to Display constructor");
+    }
+
+    mainTarget = SDL_GetRenderTarget(renderer);
+    if (!mainTarget) {
+        mainTarget = renderer; // Fallback to main renderer if no target set
+    }
+
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
-        std::cerr << "SDL_CreateRGBSurface failed: " << SDL_GetError() << std::endl;
-        // Handle error, maybe throw exception or return false
+        throw std::runtime_error("SDL_CreateRGBSurface failed: " + std::string(SDL_GetError()));
     }
 
     int fontSize = calculateFontSize();
     fontLarge = TTF_OpenFont(FONT_PATH, fontSize);
     if (!fontLarge) {
-        std::cerr << "TTF_OpenFont (large) failed: " << TTF_GetError() << std::endl;
-        // Handle error
-    }
-    fontSmall = TTF_OpenFont(FONT_PATH, fontSize / 8);
-    if (!fontSmall) {
-        std::cerr << "TTF_OpenFont (small) failed: " << TTF_GetError() << std::endl;
-        // Handle error
+        throw std::runtime_error("TTF_OpenFont (large) failed: " + std::string(TTF_GetError()));
     }
 
-    // Create target textures
-    mainTarget = SDL_GetRenderTarget(renderer);
+    fontSmall = TTF_OpenFont(FONT_PATH, fontSize / 8);
+    if (!fontSmall) {
+        TTF_CloseFont(fontLarge);
+        throw std::runtime_error("TTF_OpenFont (small) failed: " + std::string(TTF_GetError()));
+    }
+
     textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                   SDL_TEXTUREACCESS_TARGET | SDL_TEXTUREACCESS_STREAMING,
                                   width, height);
     if (!textCapture) {
-        std::cerr << "Failed to create text capture texture: " << SDL_GetError() << std::endl;
+        TTF_CloseFont(fontLarge);
+        TTF_CloseFont(fontSmall);
+        throw std::runtime_error("Failed to create text capture texture: " + std::string(SDL_GetError()));
     }
+
     texturePitch = width * 4; // 4 bytes per pixel (RGBA)
     textPixels = new Uint32[width * height];
     previousTextPixels = new Uint32[width * height];

@@ -75,13 +75,38 @@ bool Clock::initialize() {
     // Set device scale for Raspberry Pi
     SDL_RenderSetScale(renderer, 1.0f, 1.0f);
 
-    display = new Display(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
-    snow = new SnowSystem(NUM_SNOWFLAKES, SCREEN_WIDTH, SCREEN_HEIGHT);
-    weatherAPI = new WeatherAPI();
-    backgroundManager = new BackgroundManager();
+    try {
+        display = new Display(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+        snow = new SnowSystem(NUM_SNOWFLAKES, SCREEN_WIDTH, SCREEN_HEIGHT);
+        weatherAPI = new WeatherAPI();
+        backgroundManager = new BackgroundManager();
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to initialize components: " << e.what() << std::endl;
+        cleanup();
+        return false;
+    }
 
     running = true;
     return true;
+}
+
+void Clock::cleanup() {
+    if (display) delete display;
+    if (snow) delete snow;
+    if (weatherAPI) delete weatherAPI;
+    if (backgroundManager) delete backgroundManager;
+    if (renderer) SDL_DestroyRenderer(renderer);
+    if (window) SDL_DestroyWindow(window);
+    TTF_Quit();
+    IMG_Quit();
+    SDL_Quit();
+    
+    display = nullptr;
+    snow = nullptr;
+    weatherAPI = nullptr;
+    backgroundManager = nullptr;
+    renderer = nullptr;
+    window = nullptr;
 }
 
 void Clock::run() {
