@@ -23,3 +23,24 @@ cd build
 cmake .. 
 make
 ```
+
+### Cross compile for RPi
+
+Dependencies:
+
+```bash
+sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
+    libsdl2-dev:arm64 libsdl2-image-dev:arm64 \
+    libsdl2-ttf-dev:arm64 libcurl4-openssl-dev:arm64 libssl-dev:arm64
+```
+
+Build cmd:
+
+```bash
+mkdir build-rpi
+cd build-rpi
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../rpi_toolchain.cmake \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DFETCHCONTENT_FULLY_DISCONNECTED=OFF
+make
+```
