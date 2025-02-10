@@ -1,11 +1,15 @@
-cmake_minimum_required(VERSION 3.15) # Or higher, check your Conan requirements
+cmake_minimum_required(VERSION 3.15)
+include(FetchContent)
 
 project(digital_clock)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
 find_package(SDL2_ttf REQUIRED)
-find_package(nlohmann_json REQUIRED)
+
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(json)
+
 find_package(httplib REQUIRED)
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)

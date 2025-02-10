@@ -13,7 +13,8 @@ sudo apt-get install -y libx11-xcb-dev libfontenc-dev libxaw7-dev libxkbfile-dev
   libxcb-shape0-dev libxcb-sync-dev libxcb-xfixes0-dev \
   libxcb-xinerama0-dev libxcb-dri3-dev libxcb-cursor-dev \
   libxcb-dri2-0-dev libxcb-present-dev libxcb-composite0-dev \
-  libxcb-ewmh-dev libxcb-res0-dev libxcb-util-dev libxcb-util0-dev cmake
+  libxcb-ewmh-dev libxcb-res0-dev libxcb-util-dev libxcb-util0-dev cmake \
+  libsdl2-image-dev libsdl2-ttf-dev
 ```
 
 ## Build Steps
