@@ -30,7 +30,9 @@ Dependencies:
 
 ```bash
 sudo dpkg --add-architecture armhf
+sudo sh -c 'echo "deb [arch=armhf] http://ports.ubuntu.com/ $(lsb_release -cs) main restricted universe multiverse" >> /etc/apt/sources.list.d/armhf.list'
 sudo apt-get update
+sudo apt-get install crossbuild-essential-armhf
 sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
     libsdl2-dev:armhf libsdl2-image-dev:armhf \
     libsdl2-ttf-dev:armhf libcurl4-openssl-dev:armhf libssl-dev:armhf
