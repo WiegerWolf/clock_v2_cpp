@@ -3,16 +3,6 @@ include(FetchContent)
 
 project(digital_clock)
 
-if(CMAKE_CROSSCOMPILING)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
-    set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
-    
-    # Specify cross-compiled library paths if needed
-    set(SDL2_DIR /usr/lib/arm-linux-gnueabihf/cmake/SDL2)
-    set(SDL2_image_DIR /usr/lib/arm-linux-gnueabihf/cmake/SDL2_image)
-    set(SDL2_ttf_DIR /usr/lib/arm-linux-gnueabihf/cmake/SDL2_ttf)
-endif()
-
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
 find_package(SDL2_ttf REQUIRED)
