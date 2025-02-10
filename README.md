@@ -29,9 +29,11 @@ make
 Dependencies:
 
 ```bash
+sudo dpkg --add-architecture armhf
+sudo apt-get update
 sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
-    libsdl2-dev:arm64 libsdl2-image-dev:arm64 \
-    libsdl2-ttf-dev:arm64 libcurl4-openssl-dev:arm64 libssl-dev:arm64
+    libsdl2-dev:armhf libsdl2-image-dev:armhf \
+    libsdl2-ttf-dev:armhf libcurl4-openssl-dev:armhf libssl-dev:armhf
 ```
 
 Build cmd:
