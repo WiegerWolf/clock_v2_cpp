@@ -113,19 +113,27 @@ void Clock::run() {
     if (!initialize()) {
         return;
     }
-
-    Uint32 frameStart;
-    int frameTime;
-    const int TARGET_FRAME_TIME = 1000 / 60;  // 60 FPS in milliseconds
-
+    
+    Uint32 frameStart, frameTime;
+    const int TARGET_FRAME_TIME = 1000 / 30;  // Reduce to 30 FPS for RPi2
+    const int WEATHER_UPDATE_INTERVAL = 1000;  // Weather updates every 1 second
+    Uint32 lastWeatherUpdate = 0;
+    
     while (running) {
         frameStart = SDL_GetTicks();
-
+        
         handleEvents();
-        update();
+        
+        // Update weather less frequently
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - lastWeatherUpdate >= WEATHER_UPDATE_INTERVAL) {
+            update();
+            lastWeatherUpdate = currentTime;
+        }
+        
         draw();
-
-        // Proper frame timing
+        
+        // Efficient frame timing
         frameTime = SDL_GetTicks() - frameStart;
         if (frameTime < TARGET_FRAME_TIME) {
             SDL_Delay(TARGET_FRAME_TIME - frameTime);
@@ -174,43 +182,57 @@ void Clock::draw() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     
+    // Only update background if needed
     backgroundManager->draw(renderer);
-
+    
     // Begin capturing text renders
     display->beginTextCapture();
     
-    // Draw all text elements
+    static std::string lastTimeStr, lastDateStr;
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
-
-    // Draw time
+    
+    // Update time only when it changes
     std::stringstream timeStream;
-    timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour << ":" << std::setfill('0') << std::setw(2) << now_tm->tm_min;
-    display->renderText(
-        timeStream.str(),
-        display->fontLarge,
-        WHITE_COLOR,
-        SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
-    );
-
-    // Draw date
+    timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour << ":" 
+               << std::setfill('0') << std::setw(2) << now_tm->tm_min;
+    std::string currentTimeStr = timeStream.str();
+    
+    if (currentTimeStr != lastTimeStr) {
+        display->renderText(
+            currentTimeStr,
+            display->fontLarge,
+            WHITE_COLOR,
+            SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
+        );
+        lastTimeStr = currentTimeStr;
+    }
+    
+    // Update date only when it changes
     std::stringstream dateStream;
-    dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", " << now_tm->tm_mday << " " << MONTHS_RU.at(now_tm->tm_mon + 1) << " " << (now_tm->tm_year + 1900) << " года";
-    display->renderText(
-        dateStream.str(),
-        display->fontSmall,
-        WHITE_COLOR,
-        SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.1
-    );
-
-    // Draw weather
+    dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", " << now_tm->tm_mday << " " 
+              << MONTHS_RU.at(now_tm->tm_mon + 1) << " " << (now_tm->tm_year + 1900) << " года";
+    std::string currentDateStr = dateStream.str();
+    
+    if (currentDateStr != lastDateStr) {
+        display->renderText(
+            currentDateStr,
+            display->fontSmall,
+            WHITE_COLOR,
+            SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.1
+        );
+        lastDateStr = currentDateStr;
+    }
+    
+    // Weather and advice updates are already throttled in update()
     WeatherData currentWeatherData = weatherAPI->fetchWeather();
     std::string weatherStr = getWeatherDescription(
         currentWeatherData.temperature,
         currentWeatherData.weathercode,
         currentWeatherData.windspeed
     );
+    
     int weatherY = SCREEN_HEIGHT * 0.8;
     display->renderText(
         weatherStr,
@@ -218,8 +240,7 @@ void Clock::draw() {
         WHITE_COLOR,
         SCREEN_WIDTH / 2, weatherY
     );
-
-    // Draw clothing advice
+    
     if (!clothingAdvice.empty()) {
         int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.5;
         display->renderMultilineText(
@@ -232,14 +253,17 @@ void Clock::draw() {
         );
     }
     
-    // End text capture and switch back to main render target
     display->endTextCapture();
-
-    // Draw snow on top of everything
-    snow->update(currentWind, display);
+    
+    // Optimize snow updates
+    static Uint32 lastSnowUpdate = 0;
+    Uint32 currentTicks = SDL_GetTicks();
+    if (currentTicks - lastSnowUpdate >= 33) {  // ~30 FPS for snow
+        snow->update(currentWind, display);
+        lastSnowUpdate = currentTicks;
+    }
     snow->draw(renderer);
     
-    // Reset the texture change flag after snow update
     display->resetTextureChangeFlag();
     
     SDL_RenderPresent(renderer);

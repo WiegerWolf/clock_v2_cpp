@@ -194,3 +194,47 @@ void BackgroundManager::draw(SDL_Renderer* renderer) {
         SDL_RenderCopy(renderer, overlayTexture, NULL, NULL);
     }
 }
+
+void BackgroundManager::render(SDL_Renderer* renderer) {
+    static Uint32 lastUpdateTime = 0;
+    Uint32 currentTime = SDL_GetTicks();
+    
+    // Update gradient only every 100ms
+    if (currentTime - lastUpdateTime >= 100) {
+        updateGradient();
+        lastUpdateTime = currentTime;
+    }
+    
+    SDL_SetRenderTarget(renderer, nullptr);
+    SDL_RenderCopy(renderer, backgroundTexture, nullptr, nullptr);
+}
+
+void BackgroundManager::updateGradient() {
+    void* pixels;
+    int pitch;
+    
+    if (SDL_LockTexture(backgroundTexture, nullptr, &pixels, &pitch) < 0) {
+        return;
+    }
+    
+    Uint32* pixelData = static_cast<Uint32*>(pixels);
+    const int width = screenWidth;
+    const int height = screenHeight;
+    
+    #pragma omp parallel for collapse(2)
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            float normalizedY = static_cast<float>(y) / height;
+            float normalizedX = static_cast<float>(x) / width;
+            
+            // Use pre-calculated color values when possible
+            Uint8 r = static_cast<Uint8>(topColor.r * (1.0f - normalizedY) + bottomColor.r * normalizedY);
+            Uint8 g = static_cast<Uint8>(topColor.g * (1.0f - normalizedY) + bottomColor.g * normalizedY);
+            Uint8 b = static_cast<Uint8>(topColor.b * (1.0f - normalizedY) + bottomColor.b * normalizedY);
+            
+            pixelData[y * width + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+        }
+    }
+    
+    SDL_UnlockTexture(backgroundTexture);
+}

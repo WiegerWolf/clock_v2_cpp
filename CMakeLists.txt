@@ -3,8 +3,19 @@ include(FetchContent)
 
 project(digital_clock)
 
-# Add compiler flags for optimization and profiling
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -pg -g")
+# Check if we're building for Raspberry Pi
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+    # Raspberry Pi specific optimizations
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -ffast-math -pg -g")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -ffast-math")
+else()
+    # Generic optimization flags for other platforms
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -pg -g")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math")
+endif()
+
+# Enable Link Time Optimization
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
