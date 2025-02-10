@@ -25,17 +25,19 @@ private:
     void createTextures(SDL_Renderer* renderer);
     void updateGradient();  // Added new gradient update method
     
-    SDL_Surface* currentImage;
-    SDL_Surface* overlay;
-    SDL_Texture* currentTexture;  // Cached texture
-    SDL_Texture* overlayTexture;  // Cached overlay texture
-    SDL_Texture* backgroundTexture;  // Added for gradient
-    time_t lastUpdate;
+    int currentWidth{0};
+    int currentHeight{0};
+    SDL_Surface* currentImage{nullptr};
+    SDL_Surface* overlay{nullptr};
+    SDL_Texture* currentTexture{nullptr};  // Cached texture
+    SDL_Texture* overlayTexture{nullptr};  // Cached overlay texture
+    SDL_Texture* backgroundTexture{nullptr};  // Added for gradient
+    time_t lastUpdate{0};
     std::string error;
     std::mutex mutex;
     std::atomic<bool> isLoading{false};
-    SDL_Surface* pendingImage;
-    bool texturesNeedUpdate;
+    SDL_Surface* pendingImage{nullptr};
+    bool texturesNeedUpdate{false};
     
     struct Color {
         Uint8 r, g, b;

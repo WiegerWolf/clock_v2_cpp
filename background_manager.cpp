@@ -17,7 +17,7 @@ using json = nlohmann::json;
 BackgroundManager::BackgroundManager() 
     : currentImage(nullptr), overlay(nullptr), currentTexture(nullptr), 
     overlayTexture(nullptr), lastUpdate(0), error(""), pendingImage(nullptr),
-    texturesNeedUpdate(true) {}
+    texturesNeedUpdate(true), currentWidth(0), currentHeight(0) {}
 
 BackgroundManager::~BackgroundManager() {
     if (currentImage) {
@@ -139,6 +139,8 @@ void BackgroundManager::loadImageAsync(const std::string& url, int width, int he
 }
 
 void BackgroundManager::update(int width, int height) {
+    currentWidth = width;
+    currentHeight = height;
     time_t currentTime;
     time(&currentTime);
     
@@ -182,24 +184,14 @@ void BackgroundManager::createTextures(SDL_Renderer* renderer) {
 }
 
 void BackgroundManager::draw(SDL_Renderer* renderer) {
-    std::lock_guard<std::mutex> lock(mutex);
-    
-    createTextures(renderer);
-    
-    if (currentTexture) {
-        SDL_RenderCopy(renderer, currentTexture, NULL, NULL);
-    }
-    
-    if (overlayTexture) {
-        SDL_RenderCopy(renderer, overlayTexture, NULL, NULL);
-    }
+    // Use optimized render method instead
+    render(renderer);
 }
 
 void BackgroundManager::render(SDL_Renderer* renderer) {
     static Uint32 lastUpdateTime = 0;
     Uint32 currentTime = SDL_GetTicks();
     
-    // Update gradient only every 100ms
     if (currentTime - lastUpdateTime >= 100) {
         updateGradient();
         lastUpdateTime = currentTime;
@@ -218,21 +210,17 @@ void BackgroundManager::updateGradient() {
     }
     
     Uint32* pixelData = static_cast<Uint32*>(pixels);
-    const int width = screenWidth;
-    const int height = screenHeight;
     
     #pragma omp parallel for collapse(2)
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            float normalizedY = static_cast<float>(y) / height;
-            float normalizedX = static_cast<float>(x) / width;
+    for (int y = 0; y < currentHeight; y++) {
+        for (int x = 0; x < currentWidth; x++) {
+            float normalizedY = static_cast<float>(y) / currentHeight;
             
-            // Use pre-calculated color values when possible
             Uint8 r = static_cast<Uint8>(topColor.r * (1.0f - normalizedY) + bottomColor.r * normalizedY);
             Uint8 g = static_cast<Uint8>(topColor.g * (1.0f - normalizedY) + bottomColor.g * normalizedY);
             Uint8 b = static_cast<Uint8>(topColor.b * (1.0f - normalizedY) + bottomColor.b * normalizedY);
             
-            pixelData[y * width + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+            pixelData[y * currentWidth + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
         }
     }
     
