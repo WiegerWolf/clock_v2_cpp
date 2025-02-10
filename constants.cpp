@@ -10,4 +10,4 @@ const double BACKGROUND_DARKNESS = 0.5; // 0 = no darkening, 1 = completely blac
 const char* WEATHER_API_URL_HOST = "api.open-meteo.com";
 const int WEATHER_API_URL_PORT = 443;
 const char* WEATHER_API_URL_PATH = "/v1/forecast?latitude=52.3738&longitude=4.8910&hourly=apparent_temperature,precipitation&current_weather=true&windspeed_unit=ms&timezone=auto";
-const char* FONT_PATH = "assets/fonts/Ubuntu-R.ttf";
+const char* FONT_PATH = "../assets/fonts/Ubuntu-R.ttf";
