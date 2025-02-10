@@ -1,7 +1,8 @@
 ## Deps
 
 ```bash
-sudo apt install git ssh
+sudo apt update
+sudo apt install -y git ssh
 git clone git clone git@github.com:WiegerWolf/clock_v2_cpp.git
 ```
 
