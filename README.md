@@ -25,7 +25,7 @@ mkdir build && cd build
 
 2. Install dependencies using Conan:
 ```bash
-conan install .. --build=missing
+conan install .. --build=missing -of=build
 ```
 
 3. Configure CMake:
