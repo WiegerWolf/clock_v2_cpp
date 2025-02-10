@@ -27,7 +27,7 @@ conan install . --build=missing -of=build
 ```bash
 cd build
 source conanbuild.sh 
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake
 ```
 
 4. Build the project:
