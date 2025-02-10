@@ -13,7 +13,12 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(json)
 
-find_package(httplib REQUIRED)
+FetchContent_Declare(cpp-httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.18.7
+)
+FetchContent_MakeAvailable(cpp-httplib)
+
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
