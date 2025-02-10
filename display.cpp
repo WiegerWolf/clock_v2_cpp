@@ -18,11 +18,10 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
         throw std::runtime_error("Null renderer passed to Display constructor");
     }
 
+    // Get the current render target, if any
     mainTarget = SDL_GetRenderTarget(renderer);
-    if (!mainTarget) {
-        mainTarget = renderer; // Fallback to main renderer if no target set
-    }
-
+    // Note: If no target is set, mainTarget will be nullptr, which is what we want
+    
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
         throw std::runtime_error("SDL_CreateRGBSurface failed: " + std::string(SDL_GetError()));
