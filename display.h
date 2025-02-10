@@ -57,6 +57,7 @@ private:
     Uint32* textPixels;
     int texturePitch;
     SDL_Texture* mainTarget;
+    SDL_Texture* batchTexture;  // Move batchTexture to class member
 
     bool textureChanged;
     Uint32* previousTextPixels;

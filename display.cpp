@@ -12,16 +12,15 @@
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), 
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
-    textureChanged(false), previousTextPixels(nullptr), mainTarget(nullptr), screenSurface(nullptr) {
+    textureChanged(false), previousTextPixels(nullptr), mainTarget(nullptr), screenSurface(nullptr),
+    batchTexture(nullptr), texturePitch(0) {
     
     if (!renderer) {
         throw std::runtime_error("Null renderer passed to Display constructor");
     }
 
-    // Get the current render target, if any
     mainTarget = SDL_GetRenderTarget(renderer);
-    // Note: If no target is set, mainTarget will be nullptr, which is what we want
-    
+
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
         throw std::runtime_error("SDL_CreateRGBSurface failed: " + std::string(SDL_GetError()));
@@ -30,28 +29,69 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     int fontSize = calculateFontSize();
     fontLarge = TTF_OpenFont(FONT_PATH, fontSize);
     if (!fontLarge) {
+        SDL_FreeSurface(screenSurface);
         throw std::runtime_error("TTF_OpenFont (large) failed: " + std::string(TTF_GetError()));
     }
 
     fontSmall = TTF_OpenFont(FONT_PATH, fontSize / 8);
     if (!fontSmall) {
+        SDL_FreeSurface(screenSurface);
         TTF_CloseFont(fontLarge);
         throw std::runtime_error("TTF_OpenFont (small) failed: " + std::string(TTF_GetError()));
     }
+
+    texturePitch = width * 4; // 4 bytes per pixel (RGBA)
+    
+    // Allocate and initialize pixel buffers
+    try {
+        textPixels = new Uint32[width * height];
+        previousTextPixels = new Uint32[width * height];
+    } catch (const std::bad_alloc& e) {
+        SDL_FreeSurface(screenSurface);
+        TTF_CloseFont(fontLarge);
+        TTF_CloseFont(fontSmall);
+        throw std::runtime_error("Failed to allocate pixel buffers");
+    }
+    
+    std::memset(textPixels, 0, width * height * sizeof(Uint32));
+    std::memset(previousTextPixels, 0, width * height * sizeof(Uint32));
 
     textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                   SDL_TEXTUREACCESS_TARGET | SDL_TEXTUREACCESS_STREAMING,
                                   width, height);
     if (!textCapture) {
-        TTF_CloseFont(fontLarge);
-        TTF_CloseFont(fontSmall);
+        cleanup();
         throw std::runtime_error("Failed to create text capture texture: " + std::string(SDL_GetError()));
     }
 
-    texturePitch = width * 4; // 4 bytes per pixel (RGBA)
-    textPixels = new Uint32[width * height];
-    previousTextPixels = new Uint32[width * height];
-    std::memset(previousTextPixels, 0, width * height * sizeof(Uint32));
+    // Initialize textCapture with transparency
+    SDL_SetRenderTarget(renderer, textCapture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderTarget(renderer, mainTarget);
+}
+
+void Display::cleanup() {
+    if (textPixels) {
+        delete[] textPixels;
+        textPixels = nullptr;
+    }
+    if (previousTextPixels) {
+        delete[] previousTextPixels;
+        previousTextPixels = nullptr;
+    }
+    if (screenSurface) {
+        SDL_FreeSurface(screenSurface);
+        screenSurface = nullptr;
+    }
+    if (fontLarge) {
+        TTF_CloseFont(fontLarge);
+        fontLarge = nullptr;
+    }
+    if (fontSmall) {
+        TTF_CloseFont(fontSmall);
+        fontSmall = nullptr;
+    }
 }
 
 Display::~Display() {
@@ -60,13 +100,19 @@ Display::~Display() {
             SDL_DestroyTexture(pair.second.texture);
         }
     }
-    if (fontLarge) TTF_CloseFont(fontLarge);
-    if (fontSmall) TTF_CloseFont(fontSmall);
-    if (screenSurface) SDL_FreeSurface(screenSurface);
-    if (backgroundManager) delete backgroundManager;
-    if (textCapture) SDL_DestroyTexture(textCapture);
-    delete[] textPixels;
-    delete[] previousTextPixels;
+    textureCache.clear();
+    
+    if (textCapture) {
+        SDL_DestroyTexture(textCapture);
+    }
+    if (batchTexture) {
+        SDL_DestroyTexture(batchTexture);
+    }
+    if (backgroundManager) {
+        delete backgroundManager;
+    }
+    
+    cleanup();
 }
 
 int Display::calculateFontSize() {
@@ -251,7 +297,6 @@ void Display::cleanupOldCachedTextures(Uint32 currentTime) {
 }
 
 void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY) {
-    static SDL_Texture* batchTexture = nullptr;
     SDL_Rect textRect;
     SDL_Texture* textTexture = getCachedTexture(text, font, color, textRect);
     if (!textTexture) return;
@@ -259,14 +304,25 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
     textRect.x = centerX - textRect.w / 2;
     textRect.y = centerY - textRect.h / 2;
 
-    // Draw directly to current target to reduce switches
+    // Draw directly to current target
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
 
-    // Update collision texture in background
+    // Create or update batch texture if needed
     if (!batchTexture) {
         batchTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                        SDL_TEXTUREACCESS_TARGET, sizeW, sizeH);
+        if (!batchTexture) {
+            std::cerr << "Failed to create batch texture: " << SDL_GetError() << std::endl;
+            return;
+        }
+        // Initialize with transparency
+        SDL_SetRenderTarget(renderer, batchTexture);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderTarget(renderer, mainTarget);
     }
+
+    // Update collision texture
     SDL_SetRenderTarget(renderer, batchTexture);
     SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
     SDL_SetRenderTarget(renderer, mainTarget);
@@ -303,14 +359,29 @@ void Display::updateTextCapture() {
     }
     lastCheckTime = currentTime;
 
+    // Ensure textCapture exists
+    if (!textCapture) {
+        std::cerr << "textCapture is null in updateTextCapture" << std::endl;
+        return;
+    }
+
     // Use streaming texture access for faster pixel operations
-    void* pixels;
-    int pitch;
-    SDL_LockTexture(textCapture, NULL, &pixels, &pitch);
-    memcpy(textPixels, pixels, sizeW * sizeH * sizeof(Uint32));
-    SDL_UnlockTexture(textCapture);
-    
-    checkTextureChange();
+    void* pixels = nullptr;
+    int pitch = 0;
+    if (SDL_LockTexture(textCapture, NULL, &pixels, &pitch) < 0) {
+        std::cerr << "Failed to lock texture: " << SDL_GetError() << std::endl;
+        return;
+    }
+
+    if (pixels) {
+        size_t size = sizeW * sizeH * sizeof(Uint32);
+        memcpy(textPixels, pixels, size);
+        SDL_UnlockTexture(textCapture);
+        checkTextureChange();
+    } else {
+        SDL_UnlockTexture(textCapture);
+        std::cerr << "No pixels available in locked texture" << std::endl;
+    }
 }
 
 void Display::checkTextureChange() {
