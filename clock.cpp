@@ -187,7 +187,7 @@ void Clock::draw() {
         int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.5;
         display->renderMultilineText(
             clothingAdvice,
-            display->fontSmall,
+            display->fontExtraSmall,  // Use the new smaller font
             WHITE_COLOR,
             SCREEN_WIDTH / 2,
             adviceY,

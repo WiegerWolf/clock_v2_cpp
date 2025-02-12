@@ -68,6 +68,7 @@ public:
 
     TTF_Font* fontLarge;
     TTF_Font* fontSmall;
+    TTF_Font* fontExtraSmall;
     SDL_Renderer* renderer;
     SDL_Surface* screenSurface;
     BackgroundManager* backgroundManager;

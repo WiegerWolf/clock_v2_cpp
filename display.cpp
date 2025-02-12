@@ -11,7 +11,7 @@
 #include <algorithm>
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
-    : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr),
+    : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), fontExtraSmall(nullptr),
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
     textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0),
     currentFps(0.0f) {
@@ -32,6 +32,10 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     if (!fontSmall) {
         std::cerr << "TTF_OpenFont (small) failed: " << TTF_GetError() << std::endl;
     }
+    fontExtraSmall = TTF_OpenFont(FONT_PATH, fontSize / 12);
+    if (!fontExtraSmall) {
+        std::cerr << "TTF_OpenFont (extra small) failed: " << TTF_GetError() << std::endl;
+    }
 
     mainTarget = SDL_GetRenderTarget(renderer);
     textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
@@ -48,6 +52,7 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
 Display::~Display() {
     if (fontLarge) TTF_CloseFont(fontLarge);
     if (fontSmall) TTF_CloseFont(fontSmall);
+    if (fontExtraSmall) TTF_CloseFont(fontExtraSmall);
     if (screenSurface) SDL_FreeSurface(screenSurface);
     if (backgroundManager) delete backgroundManager;
     if (textCapture) SDL_DestroyTexture(textCapture);
