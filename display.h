@@ -4,10 +4,51 @@
 
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <vector> // Add this line
+#include <vector>
 #include <string>
+#include <unordered_map>
+#include <memory>
 
 class BackgroundManager;
+
+// Hash structure for text rendering parameters
+struct TextKey {
+    std::string text;
+    TTF_Font* font;
+    SDL_Color color;
+    int x, y;
+
+    bool operator==(const TextKey& other) const {
+        return text == other.text &&
+               font == other.font &&
+               color.r == other.color.r &&
+               color.g == other.color.g &&
+               color.b == other.color.b &&
+               color.a == other.color.a &&
+               x == other.x &&
+               y == other.y;
+    }
+};
+
+// Custom hash function for TextKey
+struct TextKeyHash {
+    std::size_t operator()(const TextKey& k) const {
+        std::size_t h1 = std::hash<std::string>{}(k.text);
+        std::size_t h2 = std::hash<void*>{}(k.font);
+        std::size_t h3 = std::hash<int>{}(k.color.r << 24 | k.color.g << 16 | k.color.b << 8 | k.color.a);
+        std::size_t h4 = std::hash<int>{}(k.x);
+        std::size_t h5 = std::hash<int>{}(k.y);
+        return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+    }
+};
+
+// Cached texture with metadata
+struct CachedTexture {
+    SDL_Texture* texture;
+    Uint32 lastUsed;  // Frame counter when last used
+    SDL_Rect rect;    // Position and size
+    bool isDynamic;   // Whether this is dynamic content (time, etc.)
+};
 
 class Display {
 public:
@@ -34,6 +75,10 @@ public:
 
 private:
     int sizeW, sizeH;
+    Uint32 frameCounter;  // Track frames for cache management
+    static const Uint32 CACHE_LIFETIME = 300;  // ~5 seconds at 60fps
+    static const size_t MAX_CACHE_SIZE = 100;  // Maximum number of cached textures
+
     int calculateFontSize();
     std::vector<std::string> wrapText(const std::string& text, TTF_Font* font, int maxWidth);
     bool needsTwoLines(const std::string& text, TTF_Font* font, int maxWidth);
@@ -43,11 +88,18 @@ private:
     void updateTextCapture();
     Uint32* textPixels;
     int texturePitch;
-    SDL_Texture* mainTarget;  // Add this line to store the main render target
+    SDL_Texture* mainTarget;
 
     bool textureChanged;
     Uint32* previousTextPixels;
     void checkTextureChange();
+
+    // Texture caching
+    std::unordered_map<TextKey, CachedTexture, TextKeyHash> textureCache;
+    SDL_Texture* getCachedTexture(const std::string& text, TTF_Font* font, 
+                                 SDL_Color color, int x, int y, bool isDynamic = false);
+    void cleanupCache();
+    SDL_Texture* createTextTexture(const std::string& text, TTF_Font* font, SDL_Color color, SDL_Rect& outRect);
 };
 
 #endif // DISPLAY_H
