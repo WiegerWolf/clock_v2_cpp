@@ -16,7 +16,7 @@ struct TextKey {
     std::string text;
     TTF_Font* font;
     SDL_Color color;
-    int x, y;
+    bool isDynamic;  // Whether this is dynamic content (time, etc.)
 
     bool operator==(const TextKey& other) const {
         return text == other.text &&
@@ -25,8 +25,7 @@ struct TextKey {
                color.g == other.color.g &&
                color.b == other.color.b &&
                color.a == other.color.a &&
-               x == other.x &&
-               y == other.y;
+               isDynamic == other.isDynamic;
     }
 };
 
@@ -36,18 +35,17 @@ struct TextKeyHash {
         std::size_t h1 = std::hash<std::string>{}(k.text);
         std::size_t h2 = std::hash<void*>{}(k.font);
         std::size_t h3 = std::hash<int>{}(k.color.r << 24 | k.color.g << 16 | k.color.b << 8 | k.color.a);
-        std::size_t h4 = std::hash<int>{}(k.x);
-        std::size_t h5 = std::hash<int>{}(k.y);
-        return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+        std::size_t h4 = std::hash<bool>{}(k.isDynamic);
+        return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
     }
 };
 
 // Cached texture with metadata
 struct CachedTexture {
     SDL_Texture* texture;
-    Uint32 lastUsed;  // Frame counter when last used
-    SDL_Rect rect;    // Position and size
-    bool isDynamic;   // Whether this is dynamic content (time, etc.)
+    Uint32 lastUsed;     // Frame counter when last used
+    SDL_Rect rect;       // Size only for static textures
+    size_t memorySize;   // Estimated memory usage in bytes
 };
 
 class Display {
@@ -57,7 +55,7 @@ public:
 
     void clear();
     void update();
-    void renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY);
+    void renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY, bool isDynamic = false);
     void renderMultilineText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int startY, float lineSpacing);
 
     bool isPixelOccupied(int x, int y) const;
@@ -76,8 +74,10 @@ public:
 private:
     int sizeW, sizeH;
     Uint32 frameCounter;  // Track frames for cache management
-    static const Uint32 CACHE_LIFETIME = 300;  // ~5 seconds at 60fps
-    static const size_t MAX_CACHE_SIZE = 100;  // Maximum number of cached textures
+    static const Uint32 CACHE_LIFETIME = 300;        // ~5 seconds at 60fps
+    static const size_t MAX_CACHE_SIZE = 100;        // Maximum number of cached textures
+    static const size_t MAX_CACHE_MEMORY = 32*1024*1024;  // 32MB max texture cache
+    size_t currentCacheMemory;                       // Current texture cache memory usage
 
     int calculateFontSize();
     std::vector<std::string> wrapText(const std::string& text, TTF_Font* font, int maxWidth);
@@ -97,9 +97,13 @@ private:
     // Texture caching
     std::unordered_map<TextKey, CachedTexture, TextKeyHash> textureCache;
     SDL_Texture* getCachedTexture(const std::string& text, TTF_Font* font, 
-                                 SDL_Color color, int x, int y, bool isDynamic = false);
+                               SDL_Color color, bool isDynamic = false);
     void cleanupCache();
     SDL_Texture* createTextTexture(const std::string& text, TTF_Font* font, SDL_Color color, SDL_Rect& outRect);
+    
+    // Memory management
+    size_t estimateTextureMemory(int width, int height);
+    void removeOldestTexture();
 };
 
 #endif // DISPLAY_H

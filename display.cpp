@@ -13,7 +13,7 @@
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr),
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
-    textureChanged(false), previousTextPixels(nullptr), frameCounter(0) {
+    textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0) {
     
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
@@ -59,6 +59,29 @@ Display::~Display() {
     }
 }
 
+size_t Display::estimateTextureMemory(int width, int height) {
+    // Assuming RGBA8888 format (4 bytes per pixel)
+    return width * height * 4;
+}
+
+void Display::removeOldestTexture() {
+    if (textureCache.empty()) return;
+
+    auto oldest = textureCache.begin();
+    Uint32 oldestTime = oldest->second.lastUsed;
+
+    for (auto it = textureCache.begin(); it != textureCache.end(); ++it) {
+        if (it->second.lastUsed < oldestTime) {
+            oldest = it;
+            oldestTime = it->second.lastUsed;
+        }
+    }
+
+    currentCacheMemory -= oldest->second.memorySize;
+    SDL_DestroyTexture(oldest->second.texture);
+    textureCache.erase(oldest);
+}
+
 SDL_Texture* Display::createTextTexture(const std::string& text, TTF_Font* font, SDL_Color color, SDL_Rect& outRect) {
     SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
     if (!surface) {
@@ -80,8 +103,8 @@ SDL_Texture* Display::createTextTexture(const std::string& text, TTF_Font* font,
 }
 
 SDL_Texture* Display::getCachedTexture(const std::string& text, TTF_Font* font, 
-                                     SDL_Color color, int x, int y, bool isDynamic) {
-    TextKey key{text, font, color, x, y};
+                                     SDL_Color color, bool isDynamic) {
+    TextKey key{text, font, color, isDynamic};
     auto it = textureCache.find(key);
     
     if (it != textureCache.end()) {
@@ -90,25 +113,27 @@ SDL_Texture* Display::getCachedTexture(const std::string& text, TTF_Font* font,
         return it->second.texture;
     }
 
-    // Clean cache if it's too large
-    if (textureCache.size() >= MAX_CACHE_SIZE) {
-        cleanupCache();
-    }
-
     // Create new texture
     SDL_Rect rect;
     SDL_Texture* texture = createTextTexture(text, font, color, rect);
     if (!texture) return nullptr;
 
-    rect.x = x - rect.w / 2;
-    rect.y = y - rect.h / 2;
+    // Calculate memory size
+    size_t memSize = estimateTextureMemory(rect.w, rect.h);
+
+    // Manage cache size
+    while ((textureCache.size() >= MAX_CACHE_SIZE || currentCacheMemory + memSize > MAX_CACHE_MEMORY) 
+           && !textureCache.empty()) {
+        removeOldestTexture();
+    }
 
     // Add to cache
+    currentCacheMemory += memSize;
     textureCache[key] = CachedTexture{
         texture,
         frameCounter,
         rect,
-        isDynamic
+        memSize
     };
 
     return texture;
@@ -117,56 +142,55 @@ SDL_Texture* Display::getCachedTexture(const std::string& text, TTF_Font* font,
 void Display::cleanupCache() {
     std::vector<TextKey> toRemove;
     
-    // Find old entries
     for (const auto& pair : textureCache) {
         if (frameCounter - pair.second.lastUsed > CACHE_LIFETIME || 
-            (pair.second.isDynamic && frameCounter - pair.second.lastUsed > 1)) {
+            (pair.first.isDynamic && frameCounter - pair.second.lastUsed > 1)) {
             toRemove.push_back(pair.first);
         }
     }
 
-    // Remove old entries
     for (const auto& key : toRemove) {
-        if (textureCache[key].texture) {
-            SDL_DestroyTexture(textureCache[key].texture);
-        }
+        currentCacheMemory -= textureCache[key].memorySize;
+        SDL_DestroyTexture(textureCache[key].texture);
         textureCache.erase(key);
     }
 }
 
-void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY) {
+void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY, bool isDynamic) {
     // Get cached or create new texture
-    bool isDynamic = (font == fontLarge);  // Assume large font is used for time display
-    SDL_Texture* texture = getCachedTexture(text, font, color, centerX, centerY, isDynamic);
+    SDL_Texture* texture = getCachedTexture(text, font, color, isDynamic);
     if (!texture) return;
 
-    // Get the cached rect
-    const SDL_Rect& rect = textureCache[TextKey{text, font, color, centerX, centerY}].rect;
-
-    // Render to both textures
-    SDL_Texture* currentTarget = SDL_GetRenderTarget(renderer);
+    // Get the cached rect for size
+    const SDL_Rect& cachedRect = textureCache[TextKey{text, font, color, isDynamic}].rect;
     
-    // Render to collision texture
-    SDL_SetRenderTarget(renderer, textCapture);
-    SDL_RenderCopy(renderer, texture, nullptr, &rect);
+    // Calculate position
+    SDL_Rect destRect = {
+        centerX - cachedRect.w / 2,
+        centerY - cachedRect.h / 2,
+        cachedRect.w,
+        cachedRect.h
+    };
+
+    // For dynamic text or if we need collision detection, render to text capture
+    if (isDynamic) {
+        SDL_SetRenderTarget(renderer, textCapture);
+        SDL_RenderCopy(renderer, texture, nullptr, &destRect);
+    }
     
     // Render to screen
     SDL_SetRenderTarget(renderer, mainTarget);
-    SDL_RenderCopy(renderer, texture, nullptr, &rect);
-    
-    // Restore original target
-    SDL_SetRenderTarget(renderer, currentTarget);
+    SDL_RenderCopy(renderer, texture, nullptr, &destRect);
 
     // Increment frame counter
     frameCounter++;
 }
 
+// Rest of the implementation remains largely unchanged
 void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_Color color, 
                                 int centerX, int startY, float lineSpacing) {
     int maxWidth = static_cast<int>(sizeW * 0.9);
-    int maxHeight = sizeH - startY;
-    int currentSize = TTF_FontHeight(font);
-
+    
     if (!needsTwoLines(text, font, maxWidth)) {
         renderText(text, font, color, centerX, startY);
         return;
@@ -179,7 +203,7 @@ void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_C
     renderText(lines.second, font, color, centerX, startY + lineHeight);
 }
 
-// Rest of the implementation remains unchanged
+// Rest of the implementation (calculateFontSize, wrapText, etc.) remains unchanged
 int Display::calculateFontSize() {
     int targetHeight = static_cast<int>(sizeH * 0.8);
     int testSize = 100;
