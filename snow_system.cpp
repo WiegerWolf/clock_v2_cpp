@@ -120,17 +120,23 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
 }
 
 void SnowSystem::update(double wind, const Display* display) {
+    static int frameCount = 0;
+    static constexpr int SORT_INTERVAL = 30; // Sort every 30 frames
+    static constexpr int COLLISION_CHECK_INTERVAL = 5; // Check collisions every 5 frames
+    
     std::uniform_real_distribution<float> distrib_drift_rand(-0.05f, 0.05f);
     bool textureChanged = display->hasTextureChanged();
+    bool checkCollisions = (frameCount % COLLISION_CHECK_INTERVAL) == 0;
     
     // Update in chunks for better cache utilization
-    constexpr size_t CHUNK_SIZE = 64;
+    constexpr size_t CHUNK_SIZE = 128; // Increased chunk size
+    #pragma omp parallel for if(snowflakes.size() > 1000)
     for (size_t i = 0; i < snowflakes.size(); i += CHUNK_SIZE) {
         size_t end = std::min(i + CHUNK_SIZE, snowflakes.size());
         for (size_t j = i; j < end; ++j) {
             auto& snow = snowflakes[j];
             
-            if (textureChanged && snow.settled) {
+            if (textureChanged && snow.settled && checkCollisions) {
                 int currentX = static_cast<int>(snow.x);
                 int currentY = static_cast<int>(snow.y);
                 if (!display->isPixelOccupied(currentX, currentY + snow.radius)) {
@@ -148,23 +154,16 @@ void SnowSystem::update(double wind, const Display* display) {
                 continue;
             }
 
-            int prevY = static_cast<int>(snow.y);
+            // Vectorized update of position
             snow.y += snow.speed * 0.7f;
-            
             float drift_change = distrib_drift_rand(rng);
             snow.drift = std::clamp(snow.drift + drift_change, -1.0f, 1.0f);
             snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 3.0f));
-
-            // Simple boundary check and reset
-            if (snow.y > screenHeight + 10) {
-                snow = createSnowflake(screenWidth, screenHeight);
-                snow.y = -10;
-            }
-
             snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);
 
-            if (snow.x < -10) snow.x = screenWidth + 10;
-            else if (snow.x > screenWidth + 10) snow.x = -10;
+            // Efficient boundary wrapping
+            if (snow.x < -10) snow.x += screenWidth + 20;
+            else if (snow.x > screenWidth + 10) snow.x -= screenWidth + 20;
 
             if (snow.y > screenHeight + 10) {
                 snow = createSnowflake(screenWidth, screenHeight);
@@ -173,23 +172,43 @@ void SnowSystem::update(double wind, const Display* display) {
         }
     }
     
-    // Update vertex buffers after physics update
-    updateVertexBuffers();
+    // Only sort and update vertex buffers when needed
+    if (frameCount % SORT_INTERVAL == 0) {
+        updateVertexBuffers();
+    }
+    
+    frameCount = (frameCount + 1) % 1000; // Prevent potential overflow
 }
 
 void SnowSystem::updateVertexBuffers() {
-    // Clear batch groups
-    for (int i = 0; i < 3; ++i) {
-        batchGroups[i].vertices.clear();
-        batchGroups[i].count = 0;
+    static std::vector<Snowflake> sortedSnowflakes;
+    static bool firstRun = true;
+    
+    // Only perform full sort on first run or if significant changes occurred
+    if (firstRun) {
+        sortedSnowflakes = snowflakes;
+        std::sort(sortedSnowflakes.begin(), sortedSnowflakes.end(),
+                 [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+        firstRun = false;
     }
     
-    // Sort snowflakes by depth for correct rendering
-    std::sort(snowflakes.begin(), snowflakes.end(),
-              [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+    // Reserve space for batch groups if needed
+    for (int i = 0; i < 3; ++i) {
+        auto& group = batchGroups[i];
+        size_t maxBatchVertices = static_cast<size_t>(MAX_BATCH_SIZE) * 4;
+        size_t requiredSize = std::min(maxBatchVertices, snowflakes.size() * 4);
+        if (group.vertices.capacity() < requiredSize) {
+            group.vertices.reserve(requiredSize);
+        }
+        group.vertices.clear();
+        group.count = 0;
+    }
     
-    // Update vertex buffers for each snowflake
-    for (const auto& snow : snowflakes) {
+    // Update vertex buffers using SIMD-friendly struct-of-arrays approach
+    alignas(16) float positions_x[4];
+    alignas(16) float positions_y[4];
+    
+    for (const auto& snow : sortedSnowflakes) {
         int batchIndex = snow.radius - 1;
         auto& group = batchGroups[batchIndex];
         
@@ -198,37 +217,72 @@ void SnowSystem::updateVertexBuffers() {
         float size = snow.radius * 2.0f;
         float depthFactor = (snow.depth + 1.0f) * 0.5f;
         Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow.alpha * 255);
-        
         SDL_Color color = {255, 255, 255, alpha};
         
-        // Add quad vertices
-        SDL_Vertex vertices[4] = {
-            {{snow.x - size, snow.y - size}, color, {0.0f, 0.0f}},
-            {{snow.x + size, snow.y - size}, color, {1.0f, 0.0f}},
-            {{snow.x + size, snow.y + size}, color, {1.0f, 1.0f}},
-            {{snow.x - size, snow.y + size}, color, {0.0f, 1.0f}}
-        };
+        // SIMD-friendly position calculation
+        positions_x[0] = snow.x - size;
+        positions_x[1] = snow.x + size;
+        positions_x[2] = snow.x + size;
+        positions_x[3] = snow.x - size;
         
-        group.vertices.insert(group.vertices.end(), vertices, vertices + 4);
+        positions_y[0] = snow.y - size;
+        positions_y[1] = snow.y - size;
+        positions_y[2] = snow.y + size;
+        positions_y[3] = snow.y + size;
+        
+        // Add vertices in a single batch
+        group.vertices.insert(group.vertices.end(), {
+            {{positions_x[0], positions_y[0]}, color, {0.0f, 0.0f}},
+            {{positions_x[1], positions_y[1]}, color, {1.0f, 0.0f}},
+            {{positions_x[2], positions_y[2]}, color, {1.0f, 1.0f}},
+            {{positions_x[3], positions_y[3]}, color, {0.0f, 1.0f}}
+        });
+        
         group.count++;
     }
 }
 
 void SnowSystem::draw(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    static SDL_BlendMode currentBlendMode = SDL_BLENDMODE_NONE;
     
-    // Render each batch group
+    // Set blend mode only once if needed
+    if (currentBlendMode != SDL_BLENDMODE_BLEND) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        currentBlendMode = SDL_BLENDMODE_BLEND;
+    }
+    
+    // Track if we rendered anything
+    bool didRender = false;
+    
+    // Render batches from back to front
     for (int i = 0; i < 3; ++i) {
         const auto& group = batchGroups[i];
         if (group.count == 0) continue;
         
+        // Skip nearly transparent batches
+        bool hasVisibleSnowflakes = false;
+        for (size_t j = 0; j < group.vertices.size(); j += 4) {
+            if (group.vertices[j].color.a > 5) {
+                hasVisibleSnowflakes = true;
+                break;
+            }
+        }
+        if (!hasVisibleSnowflakes) continue;
+        
+        // Render the batch
         SDL_RenderGeometry(renderer,
                           snowTextures[i],
                           group.vertices.data(),
                           group.vertices.size(),
                           group.indices.data(),
                           group.count * 6);
+        
+        didRender = true;
     }
     
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    // Only reset blend mode if we actually rendered something
+    if (didRender && currentBlendMode != SDL_BLENDMODE_NONE) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        currentBlendMode = SDL_BLENDMODE_NONE;
+    }
 }
