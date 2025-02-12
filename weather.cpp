@@ -5,8 +5,10 @@
 #include <sstream>
 #include <cmath>
 #include <map>
+#include <unordered_map>
 
-const std::map<int, std::string> WEATHER_CODE_RU = {
+// Weather code descriptions using string_view for efficiency
+const std::map<int, std::string_view> WEATHER_CODE_RU = {
     {0, "Ясно"},
     {1, "Редкие облака"},
     {2, "Переменная облачность"},
@@ -37,7 +39,8 @@ const std::map<int, std::string> WEATHER_CODE_RU = {
     {99, "Град с грозой"}
 };
 
-std::string getWindspeedType(double windspeed) {
+// Windspeed type descriptions using string_view
+std::string_view getWindspeedType(double windspeed) {
     if (windspeed < 1) {
         return "штиль";
     } else if (windspeed <= 5) {
@@ -53,21 +56,55 @@ std::string getWindspeedType(double windspeed) {
     }
 }
 
+// Static cache for weather descriptions
+static std::unordered_map<WeatherKey, std::string, WeatherKeyHash> weatherCache;
+static const size_t MAX_CACHE_SIZE = 1000;
+
 std::string getWeatherDescription(double temperature, int weathercode, double windspeed, bool showWindspeed) {
-    std::stringstream descriptionStream;
-    descriptionStream << static_cast<int>(std::round(temperature)) << "°C";
-
-    if (WEATHER_CODE_RU.count(weathercode)) {
-        descriptionStream << ", " << WEATHER_CODE_RU.at(weathercode);
+    // Round values for cache key
+    int roundedTemp = static_cast<int>(std::round(temperature));
+    int roundedWind = static_cast<int>(std::round(windspeed));
+    
+    // Create cache key
+    WeatherKey key{roundedTemp, weathercode, roundedWind, showWindspeed};
+    
+    // Check cache
+    auto it = weatherCache.find(key);
+    if (it != weatherCache.end()) {
+        return it->second;
     }
-
+    
+    // Clean cache if too large
+    if (weatherCache.size() >= MAX_CACHE_SIZE) {
+        weatherCache.clear();
+    }
+    
+    // Build description
+    std::string description;
+    description.reserve(50); // Pre-allocate space for typical description length
+    
+    // Add temperature
+    description += std::to_string(roundedTemp);
+    description += "°C";
+    
+    // Add weather code description
+    if (auto it = WEATHER_CODE_RU.find(weathercode); it != WEATHER_CODE_RU.end()) {
+        description += ", ";
+        description += it->second;
+    }
+    
+    // Add windspeed if requested
     if (showWindspeed) {
-        std::string windspeedType = getWindspeedType(windspeed);
-        descriptionStream << ", " << windspeedType;
+        description += ", ";
+        description += getWindspeedType(windspeed);
         if (windspeed >= 1) {
-            descriptionStream << " " << static_cast<int>(std::round(windspeed)) << " м/с";
+            description += " ";
+            description += std::to_string(roundedWind);
+            description += " м/с";
         }
     }
-
-    return descriptionStream.str();
+    
+    // Cache and return
+    weatherCache[key] = description;
+    return description;
 }
