@@ -20,9 +20,12 @@
 Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice(""), currentWind(0.0) {}
 
 Clock::~Clock() {
+    if (weatherAPI) {
+        weatherAPI->stop();  // Stop weather updates before deletion
+        delete weatherAPI;
+    }
     if (display) delete display;
     if (snow) delete snow;
-    if (weatherAPI) delete weatherAPI;
     if (backgroundManager) delete backgroundManager;
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
@@ -71,7 +74,9 @@ bool Clock::initialize() {
 
     display = new Display(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
     snow = new SnowSystem(NUM_SNOWFLAKES, SCREEN_WIDTH, SCREEN_HEIGHT);
+    snow->initialize(renderer);  // Initialize snow system with renderer
     weatherAPI = new WeatherAPI();
+    weatherAPI->start();  // Start background weather updates
     backgroundManager = new BackgroundManager();
 
     running = true;
@@ -116,7 +121,7 @@ void Clock::update() {
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     if (shouldUpdateAdvice()) {
-        WeatherData currentWeatherData = weatherAPI->fetchWeather();
+        WeatherData currentWeatherData = weatherAPI->getWeather();
         clothingAdvice = getClothingAdvice(
             currentWeatherData.temperature,
             currentWeatherData.weathercode,
@@ -163,7 +168,7 @@ void Clock::draw() {
     );
 
     // Draw weather
-    WeatherData currentWeatherData = weatherAPI->fetchWeather();
+    WeatherData currentWeatherData = weatherAPI->getWeather();
     std::string weatherStr = getWeatherDescription(
         currentWeatherData.temperature,
         currentWeatherData.weathercode,
@@ -194,10 +199,9 @@ void Clock::draw() {
     display->endTextCapture();
 
     // Draw snow on top of everything
-    snow->update(currentWind, display);
     snow->draw(renderer);
     
-    // Reset the texture change flag after snow update
+    // Reset the texture change flag
     display->resetTextureChangeFlag();
     
     SDL_RenderPresent(renderer);
