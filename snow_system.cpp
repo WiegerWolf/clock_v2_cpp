@@ -121,12 +121,14 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
 
 void SnowSystem::update(double wind, const Display* display) {
     static int frameCount = 0;
-    static constexpr int SORT_INTERVAL = 30; // Sort every 30 frames
-    static constexpr int COLLISION_CHECK_INTERVAL = 5; // Check collisions every 5 frames
+    static constexpr int SORT_INTERVAL = 10; // More frequent sorting for smoother depth changes
+    static constexpr int COLLISION_CHECK_INTERVAL = 2; // More frequent collision checks
+    static constexpr float LERP_FACTOR = 0.15f; // For smooth position updates
     
     std::uniform_real_distribution<float> distrib_drift_rand(-0.05f, 0.05f);
     bool textureChanged = display->hasTextureChanged();
     bool checkCollisions = (frameCount % COLLISION_CHECK_INTERVAL) == 0;
+    bool updateVertices = true; // Always update vertices for smoother motion
     
     // Update in chunks for better cache utilization
     constexpr size_t CHUNK_SIZE = 128; // Increased chunk size
@@ -172,24 +174,32 @@ void SnowSystem::update(double wind, const Display* display) {
         }
     }
     
-    // Only sort and update vertex buffers when needed
+    // Always update vertex buffers for smooth motion
+    updateVertexBuffers();
+    
+    // Sort a portion of snowflakes each frame for smoother depth transitions
     if (frameCount % SORT_INTERVAL == 0) {
-        updateVertexBuffers();
+        size_t startIdx = (frameCount / SORT_INTERVAL) % 10 * (snowflakes.size() / 10);
+        size_t endIdx = std::min(startIdx + snowflakes.size() / 10, snowflakes.size());
+        
+        if (startIdx < endIdx) {
+            std::sort(snowflakes.begin() + startIdx, snowflakes.begin() + endIdx,
+                     [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+        }
     }
     
-    frameCount = (frameCount + 1) % 1000; // Prevent potential overflow
+    frameCount = (frameCount + 1) % (SORT_INTERVAL * 10); // Reset after full sort cycle
 }
 
 void SnowSystem::updateVertexBuffers() {
-    static std::vector<Snowflake> sortedSnowflakes;
-    static bool firstRun = true;
+    static std::vector<SDL_FPoint> prevPositions;
     
-    // Only perform full sort on first run or if significant changes occurred
-    if (firstRun) {
-        sortedSnowflakes = snowflakes;
-        std::sort(sortedSnowflakes.begin(), sortedSnowflakes.end(),
-                 [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
-        firstRun = false;
+    // Initialize or resize previous positions array if needed
+    if (prevPositions.size() != snowflakes.size()) {
+        prevPositions.resize(snowflakes.size());
+        for (size_t i = 0; i < snowflakes.size(); ++i) {
+            prevPositions[i] = {snowflakes[i].x, snowflakes[i].y};
+        }
     }
     
     // Reserve space for batch groups if needed
@@ -208,7 +218,16 @@ void SnowSystem::updateVertexBuffers() {
     alignas(16) float positions_x[4];
     alignas(16) float positions_y[4];
     
-    for (const auto& snow : sortedSnowflakes) {
+    for (size_t i = 0; i < snowflakes.size(); ++i) {
+        const auto& snow = snowflakes[i];
+        auto& prevPos = prevPositions[i];
+        
+        // Interpolate position for smoother movement
+        float targetX = snow.x;
+        float targetY = snow.y;
+        
+        prevPos.x += (targetX - prevPos.x) * LERP_FACTOR;
+        prevPos.y += (targetY - prevPos.y) * LERP_FACTOR;
         int batchIndex = snow.radius - 1;
         auto& group = batchGroups[batchIndex];
         
@@ -219,16 +238,16 @@ void SnowSystem::updateVertexBuffers() {
         Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow.alpha * 255);
         SDL_Color color = {255, 255, 255, alpha};
         
-        // SIMD-friendly position calculation
-        positions_x[0] = snow.x - size;
-        positions_x[1] = snow.x + size;
-        positions_x[2] = snow.x + size;
-        positions_x[3] = snow.x - size;
+        // SIMD-friendly position calculation using interpolated positions
+        positions_x[0] = prevPos.x - size;
+        positions_x[1] = prevPos.x + size;
+        positions_x[2] = prevPos.x + size;
+        positions_x[3] = prevPos.x - size;
         
-        positions_y[0] = snow.y - size;
-        positions_y[1] = snow.y - size;
-        positions_y[2] = snow.y + size;
-        positions_y[3] = snow.y + size;
+        positions_y[0] = prevPos.y - size;
+        positions_y[1] = prevPos.y - size;
+        positions_y[2] = prevPos.y + size;
+        positions_y[3] = prevPos.y + size;
         
         // Add vertices in a single batch
         group.vertices.insert(group.vertices.end(), {

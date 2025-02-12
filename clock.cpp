@@ -140,101 +140,87 @@ void Clock::draw() {
     static std::string lastAdviceStr;
     static int lastMinute = -1;
     static int lastDay = -1;
-    static bool needsFullRedraw = true;
     
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
 
-    // Check if we need a full redraw
-    if (now_tm->tm_min != lastMinute || display->hasTextureChanged()) {
-        needsFullRedraw = true;
+    // Always clear and draw background
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    backgroundManager->draw(renderer);
+
+    // Begin capturing text renders
+    display->beginTextCapture();
+    
+    // Update and draw time if changed
+    std::stringstream timeStream;
+    timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour << ":"
+              << std::setfill('0') << std::setw(2) << now_tm->tm_min;
+    std::string timeStr = timeStream.str();
+    if (timeStr != lastTimeStr || now_tm->tm_min != lastMinute) {
+        display->renderText(
+            timeStr,
+            display->fontLarge,
+            WHITE_COLOR,
+            SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2
+        );
+        lastTimeStr = timeStr;
         lastMinute = now_tm->tm_min;
     }
 
-    if (needsFullRedraw) {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-        
-        backgroundManager->draw(renderer);
-
-        // Begin capturing text renders
-        display->beginTextCapture();
-        
-        // Update and draw time if changed
-        std::stringstream timeStream;
-        timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour << ":"
-                  << std::setfill('0') << std::setw(2) << now_tm->tm_min;
-        std::string timeStr = timeStream.str();
-        if (timeStr != lastTimeStr) {
-            display->renderText(
-                timeStr,
-                display->fontLarge,
-                WHITE_COLOR,
-                SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2,
-                false  // Not dynamic since we control updates
-            );
-            lastTimeStr = timeStr;
-        }
-
-        // Update and draw date if day changed
-        if (now_tm->tm_mday != lastDay) {
-            std::stringstream dateStream;
-            dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", " << now_tm->tm_mday << " "
-                      << MONTHS_RU.at(now_tm->tm_mon + 1) << " " << (now_tm->tm_year + 1900) << " года";
-            std::string dateStr = dateStream.str();
-            if (dateStr != lastDateStr) {
-                display->renderText(
-                    dateStr,
-                    display->fontSmall,
-                    WHITE_COLOR,
-                    SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.1,
-                    false
-                );
-                lastDateStr = dateStr;
-            }
-            lastDay = now_tm->tm_mday;
-        }
-
-        // Draw weather if changed
-        WeatherData currentWeatherData = weatherAPI->getWeather();
-        std::string weatherStr = getWeatherDescription(
-            currentWeatherData.temperature,
-            currentWeatherData.weathercode,
-            currentWeatherData.windspeed
+    // Update and draw date if day changed
+    if (now_tm->tm_mday != lastDay) {
+        std::stringstream dateStream;
+        dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", " << now_tm->tm_mday << " "
+                  << MONTHS_RU.at(now_tm->tm_mon + 1) << " " << (now_tm->tm_year + 1900) << " года";
+        std::string dateStr = dateStream.str();
+        display->renderText(
+            dateStr,
+            display->fontSmall,
+            WHITE_COLOR,
+            SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.1
         );
-        if (weatherStr != lastWeatherStr) {
-            int weatherY = SCREEN_HEIGHT * 0.8;
-            display->renderText(
-                weatherStr,
-                display->fontSmall,
-                WHITE_COLOR,
-                SCREEN_WIDTH / 2, weatherY,
-                false
-            );
-            lastWeatherStr = weatherStr;
-        }
-
-        // Draw clothing advice if changed
-        if (!clothingAdvice.empty() && clothingAdvice != lastAdviceStr) {
-            int weatherY = SCREEN_HEIGHT * 0.8;
-            int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.5;
-            display->renderMultilineText(
-                clothingAdvice,
-                display->fontSmall,
-                WHITE_COLOR,
-                SCREEN_WIDTH / 2,
-                adviceY,
-                1.2f
-            );
-            lastAdviceStr = clothingAdvice;
-        }
-        
-        display->endTextCapture();
-        needsFullRedraw = false;
+        lastDateStr = dateStr;
+        lastDay = now_tm->tm_mday;
     }
 
-    // Draw snow before presenting
+    // Draw weather if changed
+    WeatherData currentWeatherData = weatherAPI->getWeather();
+    std::string weatherStr = getWeatherDescription(
+        currentWeatherData.temperature,
+        currentWeatherData.weathercode,
+        currentWeatherData.windspeed
+    );
+    if (weatherStr != lastWeatherStr) {
+        int weatherY = SCREEN_HEIGHT * 0.8;
+        display->renderText(
+            weatherStr,
+            display->fontSmall,
+            WHITE_COLOR,
+            SCREEN_WIDTH / 2, weatherY
+        );
+        lastWeatherStr = weatherStr;
+    }
+
+    // Draw clothing advice if changed
+    if (!clothingAdvice.empty() && clothingAdvice != lastAdviceStr) {
+        int weatherY = SCREEN_HEIGHT * 0.8;
+        int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.5;
+        display->renderMultilineText(
+            clothingAdvice,
+            display->fontSmall,
+            WHITE_COLOR,
+            SCREEN_WIDTH / 2,
+            adviceY,
+            1.2f
+        );
+        lastAdviceStr = clothingAdvice;
+    }
+    
+    display->endTextCapture();
+
+    // Draw snow
     snow->draw(renderer);
     
     // Update FPS counter

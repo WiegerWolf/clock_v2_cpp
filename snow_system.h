@@ -49,9 +49,11 @@ private:
     };
     BatchGroup batchGroups[3];  // One group per size
 
+    // Constants
     static const int SETTLE_TIMEOUT = 1000;
     static constexpr float CLOCK_PLANE_DEPTH = 0.0f;
     static constexpr float DEPTH_COLLISION_THRESHOLD = 0.1f;
+    static constexpr float LERP_FACTOR = 0.15f;  // Position interpolation factor
 };
 
 #endif // SNOW_SYSTEM_H

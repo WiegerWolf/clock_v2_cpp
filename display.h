@@ -63,8 +63,8 @@ public:
     void beginTextCapture();
     void endTextCapture();
 
-    bool hasTextureChanged() const { return textureChanged; }
-    void resetTextureChangeFlag() { textureChanged = false; }
+    bool hasTextureChanged() const { return needsTextUpdate; }
+    void resetTextureChangeFlag() { needsTextUpdate = false; }
 
     TTF_Font* fontLarge;
     TTF_Font* fontSmall;
@@ -91,15 +91,9 @@ private:
     bool needsTwoLines(const std::string& text, TTF_Font* font, int maxWidth);
     std::pair<std::string, std::string> splitIntoTwoLines(const std::string& text);
 
-    SDL_Texture* textCapture;
-    void updateTextCapture();
-    Uint32* textPixels;
-    int texturePitch;
+    SDL_Texture* textLayer;  // Persistent text layer
     SDL_Texture* mainTarget;
-
-    bool textureChanged;
-    Uint32* previousTextPixels;
-    void checkTextureChange();
+    bool needsTextUpdate;    // Flag to indicate if text layer needs updating
 
     // Texture caching
     std::unordered_map<TextKey, CachedTexture, TextKeyHash> textureCache;

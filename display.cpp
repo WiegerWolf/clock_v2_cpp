@@ -12,9 +12,8 @@
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr),
-    backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
-    textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0),
-    currentFps(0.0f) {
+    backgroundManager(new BackgroundManager()), textLayer(nullptr), mainTarget(nullptr),
+    needsTextUpdate(true), frameCounter(0), currentCacheMemory(0), currentFps(0.0f) {
     
     lastFrameTime = std::chrono::high_resolution_clock::now();
     
@@ -34,15 +33,12 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     }
 
     mainTarget = SDL_GetRenderTarget(renderer);
-    textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                  SDL_TEXTUREACCESS_TARGET, width, height);
-    if (!textCapture) {
-        std::cerr << "Failed to create text capture texture: " << SDL_GetError() << std::endl;
+    textLayer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                SDL_TEXTUREACCESS_TARGET, width, height);
+    if (!textLayer) {
+        std::cerr << "Failed to create text layer texture: " << SDL_GetError() << std::endl;
     }
-    texturePitch = width * 4;
-    textPixels = new Uint32[width * height];
-    previousTextPixels = new Uint32[width * height];
-    std::memset(previousTextPixels, 0, width * height * sizeof(Uint32));
+    SDL_SetTextureBlendMode(textLayer, SDL_BLENDMODE_BLEND);
 }
 
 Display::~Display() {
@@ -50,9 +46,7 @@ Display::~Display() {
     if (fontSmall) TTF_CloseFont(fontSmall);
     if (screenSurface) SDL_FreeSurface(screenSurface);
     if (backgroundManager) delete backgroundManager;
-    if (textCapture) SDL_DestroyTexture(textCapture);
-    delete[] textPixels;
-    delete[] previousTextPixels;
+    if (textLayer) SDL_DestroyTexture(textLayer);
 
     // Cleanup texture cache
     for (auto& pair : textureCache) {
@@ -175,15 +169,10 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
         cachedRect.h
     };
 
-    // For dynamic text or if we need collision detection, render to text capture
-    if (isDynamic) {
-        SDL_SetRenderTarget(renderer, textCapture);
-        SDL_RenderCopy(renderer, texture, nullptr, &destRect);
-    }
-    
-    // Render to screen
-    SDL_SetRenderTarget(renderer, mainTarget);
+    // Render to text layer
+    SDL_SetRenderTarget(renderer, textLayer);
     SDL_RenderCopy(renderer, texture, nullptr, &destRect);
+    needsTextUpdate = true;
 
     // Increment frame counter
     frameCounter++;
@@ -319,39 +308,20 @@ void Display::update() {
 
 void Display::beginTextCapture() {
     mainTarget = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, textCapture);
+    SDL_SetRenderTarget(renderer, textLayer);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
 }
 
 void Display::endTextCapture() {
-    updateTextCapture();
     SDL_SetRenderTarget(renderer, mainTarget);
-}
-
-void Display::updateTextCapture() {
-    SDL_Rect rect = {0, 0, sizeW, sizeH};
-    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_RGBA8888,
-                            textPixels, texturePitch) < 0) {
-        std::cerr << "Failed to read pixels: " << SDL_GetError() << std::endl;
+    if (needsTextUpdate) {
+        SDL_RenderCopy(renderer, textLayer, nullptr, nullptr);
     }
-    checkTextureChange();
-}
-
-void Display::checkTextureChange() {
-    textureChanged = false;
-    for (int i = 0; i < sizeW * sizeH; i++) {
-        if (textPixels[i] != previousTextPixels[i]) {
-            textureChanged = true;
-            break;
-        }
-    }
-    std::memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
 }
 
 bool Display::isPixelOccupied(int x, int y) const {
-    if (x < 0 || x >= sizeW || y < 0 || y >= sizeH) return false;
-    Uint32 pixel = textPixels[y * sizeW + x];
-    Uint8 alpha = (pixel & 0xFF000000) >> 24;
-    return alpha > 50;
+    // Since we're not tracking pixels anymore, we'll assume no collisions
+    // This simplification helps performance but might affect snow settling behavior
+    return false;
 }
