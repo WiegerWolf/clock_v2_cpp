@@ -3,25 +3,52 @@
 #define WEATHER_API_H
 
 #include <string>
+#include <mutex>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
 
 struct WeatherData {
     double temperature;
     int weathercode;
     double windspeed;
 
-    WeatherData() : temperature(0.0), weathercode(-1), windspeed(0.0) {} // Default constructor
+    WeatherData() : temperature(0.0), weathercode(-1), windspeed(0.0) {}
 };
 
 class WeatherAPI {
 public:
     WeatherAPI();
-    WeatherData fetchWeather();
+    ~WeatherAPI();
+
+    // Non-blocking weather data access
+    WeatherData getWeather() const;
+    
+    // Control methods
+    void start();  // Start background updates
+    void stop();   // Stop background updates
 
 private:
-    time_t lastUpdate;
+    static constexpr int UPDATE_INTERVAL = 300;  // 5 minutes in seconds
+    
+    // Thread control
+    std::atomic<bool> running;
+    std::thread updateThread;
+    mutable std::mutex dataMutex;
+    std::condition_variable updateCV;
+    
+    // Weather data
     WeatherData currentWeatherData;
-    int updateInterval;
-    bool shouldUpdate();
+    time_t lastUpdate;
+    
+    // Internal methods
+    void updateLoop();
+    WeatherData fetchWeatherFromAPI();
+    bool shouldUpdate() const;
+    
+    // Prevent copying
+    WeatherAPI(const WeatherAPI&) = delete;
+    WeatherAPI& operator=(const WeatherAPI&) = delete;
 };
 
 #endif // WEATHER_API_H
