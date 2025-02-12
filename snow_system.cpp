@@ -13,33 +13,27 @@ namespace {
         SDL_Texture* texture = SDL_CreateTexture(
             renderer,
             SDL_PIXELFORMAT_RGBA8888,
-            SDL_TEXTUREACCESS_STATIC,
+            SDL_TEXTUREACCESS_TARGET,
             diameter, diameter
         );
-        
-        std::vector<uint32_t> pixels(diameter * diameter, 0);
-        const float radiusSquared = radius * radius;
-        
-        // Create smooth circle with antialiasing
-        for (int y = 0; y < diameter; y++) {
-            for (int x = 0; x < diameter; x++) {
-                float dx = x - radius + 0.5f;
-                float dy = y - radius + 0.5f;
-                float distSquared = dx*dx + dy*dy;
-                
-                if (distSquared <= radiusSquared) {
-                    float alpha = 1.0f;
-                    if (distSquared >= (radiusSquared - 1)) {
-                        alpha = radiusSquared - distSquared;
-                    }
-                    uint32_t a = static_cast<uint32_t>(alpha * 255) & 0xFF;
-                    pixels[y * diameter + x] = (a << 24) | 0xFFFFFF;
+
+        SDL_SetRenderTarget(renderer, texture);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+        SDL_RenderClear(renderer);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        for (int w = 0; w < diameter; w++) {
+            for (int h = 0; h < diameter; h++) {
+                int dx = radius - w;
+                int dy = radius - h;
+                if ((dx*dx + dy*dy) <= (radius * radius)) {
+                    SDL_RenderDrawPoint(renderer, w, h);
                 }
             }
         }
-        
-        SDL_UpdateTexture(texture, nullptr, pixels.data(), diameter * sizeof(uint32_t));
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+
+        SDL_SetRenderTarget(renderer, nullptr);
         return texture;
     }
 }
