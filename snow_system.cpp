@@ -92,7 +92,7 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
     std::uniform_real_distribution<float> distrib_pos_y(0.0f, static_cast<float>(height));
     std::uniform_real_distribution<float> distrib_speed(0.3f, 1.2f);
     std::uniform_real_distribution<float> distrib_drift(-0.2f, 0.2f);
-    std::uniform_real_distribution<float> distrib_alpha(0.2f, 0.7f);
+    std::uniform_real_distribution<float> distrib_alpha(0.05f, 0.3f);  // More transparent snowflakes
     std::uniform_real_distribution<float> distrib_angle(0.0f, 360.0f);
     std::uniform_real_distribution<float> distrib_angle_vel(-1.0f, 1.0f);
     std::uniform_int_distribution<> distrib_radius(1, 3);

@@ -138,7 +138,10 @@ void Clock::draw() {
     SDL_RenderClear(renderer);
     
     backgroundManager->draw(renderer);
-
+    
+    // Draw snow before text
+    snow->draw(renderer);
+    
     // Begin capturing text renders
     display->beginTextCapture();
     
@@ -187,7 +190,7 @@ void Clock::draw() {
         int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.5;
         display->renderMultilineText(
             clothingAdvice,
-            display->fontExtraSmall,  // Use the new smaller font
+            display->fontExtraSmall,
             WHITE_COLOR,
             SCREEN_WIDTH / 2,
             adviceY,
@@ -197,9 +200,6 @@ void Clock::draw() {
     
     // End text capture and switch back to main render target
     display->endTextCapture();
-
-    // Draw snow on top of everything
-    snow->draw(renderer);
     
     // Reset the texture change flag
     display->resetTextureChangeFlag();

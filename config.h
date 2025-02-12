@@ -16,7 +16,7 @@ const SDL_Color WHITE_COLOR = {255, 255, 255, 255};
 const SDL_Color BLACK_COLOR = {0, 0, 0, 255};
 
 // Snow configuration
-const int NUM_SNOWFLAKES = 800;  // Increased for softer look
+const int NUM_SNOWFLAKES = 200;  // Reduced for lighter snow effect
 
 // Russian language configurations
 const std::map<int, std::string> MONTHS_RU = {
