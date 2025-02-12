@@ -13,7 +13,10 @@
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr),
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
-    textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0) {
+    textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0),
+    currentFps(0.0f) {
+    
+    lastFrameTime = std::chrono::high_resolution_clock::now();
     
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!screenSurface) {
@@ -286,7 +289,31 @@ void Display::clear() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
 }
 
+void Display::updateFpsCounter() {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFrameTime);
+    if (duration.count() > 0) {
+        currentFps = 1000.0f / duration.count();
+    }
+    lastFrameTime = now;
+}
+
+void Display::renderFpsCounter() {
+    std::string fpsText = std::to_string(static_cast<int>(currentFps)) + " FPS";
+    SDL_Color white = {255, 255, 255, 255};
+    
+    // Position in top-right corner with 10px padding
+    int textWidth, textHeight;
+    TTF_SizeText(fontSmall, fpsText.c_str(), &textWidth, &textHeight);
+    int x = sizeW - textWidth - 10;
+    int y = 10;
+    
+    renderText(fpsText, fontSmall, white, x + textWidth/2, y + textHeight/2, true);
+}
+
 void Display::update() {
+    updateFpsCounter();
+    renderFpsCounter();
     // SDL_Renderer is updated in the main loop after drawing everything
 }
 

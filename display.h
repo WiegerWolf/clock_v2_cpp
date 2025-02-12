@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <chrono>
 
 class BackgroundManager;
 
@@ -74,6 +75,12 @@ public:
 private:
     int sizeW, sizeH;
     Uint32 frameCounter;  // Track frames for cache management
+    
+    // FPS counter
+    std::chrono::high_resolution_clock::time_point lastFrameTime;
+    float currentFps;
+    void updateFpsCounter();
+    void renderFpsCounter();
     static const Uint32 CACHE_LIFETIME = 300;        // ~5 seconds at 60fps
     static const size_t MAX_CACHE_SIZE = 100;        // Maximum number of cached textures
     static const size_t MAX_CACHE_MEMORY = 32*1024*1024;  // 32MB max texture cache

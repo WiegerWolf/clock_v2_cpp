@@ -155,22 +155,10 @@ void SnowSystem::update(double wind, const Display* display) {
             snow.drift = std::clamp(snow.drift + drift_change, -1.0f, 1.0f);
             snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 3.0f));
 
-            if (std::abs(snow.depth - CLOCK_PLANE_DEPTH) < DEPTH_COLLISION_THRESHOLD) {
-                int currentX = static_cast<int>(snow.x);
-                int currentY = static_cast<int>(snow.y);
-                
-                while (prevY <= currentY) {
-                    int midY = (prevY + currentY) / 2;
-                    if (display->isPixelOccupied(currentX, midY + snow.radius)) {
-                        currentY = midY - 1;
-                        snow.settled = true;
-                        snow.y = static_cast<float>(midY);
-                        snow.settleTime = 0;
-                        snow.depth = CLOCK_PLANE_DEPTH;
-                    } else {
-                        prevY = midY + 1;
-                    }
-                }
+            // Simple boundary check and reset
+            if (snow.y > screenHeight + 10) {
+                snow = createSnowflake(screenWidth, screenHeight);
+                snow.y = -10;
             }
 
             snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);

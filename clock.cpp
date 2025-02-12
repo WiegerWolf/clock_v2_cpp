@@ -204,5 +204,8 @@ void Clock::draw() {
     // Reset the texture change flag
     display->resetTextureChangeFlag();
     
+    // Update and render FPS counter
+    display->update();
+    
     SDL_RenderPresent(renderer);
 }
