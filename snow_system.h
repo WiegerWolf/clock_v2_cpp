@@ -4,7 +4,7 @@
 
 #include <SDL.h>
 #include <vector>
-#include "display.h"  // Add this include
+#include "display.h"
 
 struct Snowflake {
     float x, y, speed, drift;
@@ -20,8 +20,9 @@ struct Snowflake {
 class SnowSystem {
 public:
     SnowSystem(int numFlakes, int screenWidth, int screenHeight);
-    ~SnowSystem() = default;
+    ~SnowSystem();  // Changed from default to handle texture cleanup
 
+    void initialize(SDL_Renderer* renderer);  // New method to initialize textures
     void update(double wind, const Display* display);
     void draw(SDL_Renderer* renderer);
 
@@ -29,6 +30,8 @@ private:
     Snowflake createSnowflake(int screenWidth, int screenHeight);
     std::vector<Snowflake> snowflakes;
     int screenWidth, screenHeight;
+    SDL_Renderer* renderer;  // Store renderer for texture management
+
     static const int SETTLE_TIMEOUT = 1000; // Time before settled snow disappears
     static constexpr float CLOCK_PLANE_DEPTH = 0.0f;
     static constexpr float DEPTH_COLLISION_THRESHOLD = 0.1f;  // How close to clock plane to check collisions
