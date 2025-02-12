@@ -20,21 +20,38 @@ struct Snowflake {
 class SnowSystem {
 public:
     SnowSystem(int numFlakes, int screenWidth, int screenHeight);
-    ~SnowSystem();  // Changed from default to handle texture cleanup
+    ~SnowSystem();
 
-    void initialize(SDL_Renderer* renderer);  // New method to initialize textures
+    void initialize(SDL_Renderer* renderer);
     void update(double wind, const Display* display);
     void draw(SDL_Renderer* renderer);
 
 private:
     Snowflake createSnowflake(int screenWidth, int screenHeight);
+    void updateVertexBuffers();
+    void initializeVertexBuffers();
+
     std::vector<Snowflake> snowflakes;
     int screenWidth, screenHeight;
-    SDL_Renderer* renderer;  // Store renderer for texture management
+    SDL_Renderer* renderer;
 
-    static const int SETTLE_TIMEOUT = 1000; // Time before settled snow disappears
+    // Batched rendering data
+    static const int MAX_BATCH_SIZE = 1024;
+    std::vector<SDL_Vertex> vertices;
+    std::vector<int> indices;
+    SDL_Texture* snowTextures[3];  // One texture per size
+    
+    // Vertex buffers for each snowflake size
+    struct BatchGroup {
+        std::vector<SDL_Vertex> vertices;
+        std::vector<int> indices;
+        size_t count;
+    };
+    BatchGroup batchGroups[3];  // One group per size
+
+    static const int SETTLE_TIMEOUT = 1000;
     static constexpr float CLOCK_PLANE_DEPTH = 0.0f;
-    static constexpr float DEPTH_COLLISION_THRESHOLD = 0.1f;  // How close to clock plane to check collisions
+    static constexpr float DEPTH_COLLISION_THRESHOLD = 0.1f;
 };
 
 #endif // SNOW_SYSTEM_H

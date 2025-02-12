@@ -6,14 +6,6 @@
 #include <array>
 
 namespace {
-    // Pre-computed circle texture for different radii
-    struct CircleTexture {
-        SDL_Texture* texture;
-        int size;
-    };
-    std::array<CircleTexture, 3> circleTextures;
-    
-    // Single RNG instance
     std::mt19937 rng{std::random_device{}()};
     
     SDL_Texture* createCircleTexture(SDL_Renderer* renderer, int radius) {
@@ -26,12 +18,22 @@ namespace {
         );
         
         std::vector<uint32_t> pixels(diameter * diameter, 0);
+        const float radiusSquared = radius * radius;
+        
+        // Create smooth circle with antialiasing
         for (int y = 0; y < diameter; y++) {
             for (int x = 0; x < diameter; x++) {
-                int dx = x - radius;
-                int dy = y - radius;
-                if (dx*dx + dy*dy <= radius*radius) {
-                    pixels[y * diameter + x] = 0xFFFFFFFF;
+                float dx = x - radius + 0.5f;
+                float dy = y - radius + 0.5f;
+                float distSquared = dx*dx + dy*dy;
+                
+                if (distSquared <= radiusSquared) {
+                    float alpha = 1.0f;
+                    if (distSquared >= (radiusSquared - 1)) {
+                        alpha = radiusSquared - distSquared;
+                    }
+                    uint32_t a = static_cast<uint32_t>(alpha * 255) & 0xFF;
+                    pixels[y * diameter + x] = (a << 24) | 0xFFFFFF;
                 }
             }
         }
@@ -39,6 +41,55 @@ namespace {
         SDL_UpdateTexture(texture, nullptr, pixels.data(), diameter * sizeof(uint32_t));
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
         return texture;
+    }
+}
+
+SnowSystem::SnowSystem(int numFlakes, int width, int height) 
+    : screenWidth(width), screenHeight(height), renderer(nullptr) {
+    snowflakes.reserve(numFlakes);
+    for (int i = 0; i < numFlakes; ++i) {
+        snowflakes.push_back(createSnowflake(screenWidth, screenHeight));
+    }
+    
+    // Initialize batch groups
+    for (int i = 0; i < 3; ++i) {
+        batchGroups[i].vertices.reserve(MAX_BATCH_SIZE * 4);  // 4 vertices per snowflake
+        batchGroups[i].indices.reserve(MAX_BATCH_SIZE * 6);   // 6 indices per snowflake
+        batchGroups[i].count = 0;
+    }
+}
+
+void SnowSystem::initialize(SDL_Renderer* r) {
+    renderer = r;
+    // Create optimized textures for each size
+    for (int i = 0; i < 3; ++i) {
+        snowTextures[i] = createCircleTexture(renderer, i + 1);
+    }
+    initializeVertexBuffers();
+}
+
+void SnowSystem::initializeVertexBuffers() {
+    // Pre-compute index patterns for quads
+    for (int i = 0; i < 3; ++i) {
+        auto& group = batchGroups[i];
+        group.indices.clear();
+        for (int j = 0; j < MAX_BATCH_SIZE; ++j) {
+            int baseVertex = j * 4;
+            group.indices.push_back(baseVertex);
+            group.indices.push_back(baseVertex + 1);
+            group.indices.push_back(baseVertex + 2);
+            group.indices.push_back(baseVertex + 2);
+            group.indices.push_back(baseVertex + 3);
+            group.indices.push_back(baseVertex);
+        }
+    }
+}
+
+SnowSystem::~SnowSystem() {
+    for (int i = 0; i < 3; ++i) {
+        if (snowTextures[i]) {
+            SDL_DestroyTexture(snowTextures[i]);
+        }
     }
 }
 
@@ -66,33 +117,6 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
         0,
         distrib_depth(rng)
     };
-}
-
-SnowSystem::SnowSystem(int numFlakes, int width, int height) 
-    : screenWidth(width), screenHeight(height), renderer(nullptr) {
-    snowflakes.reserve(numFlakes);
-    for (int i = 0; i < numFlakes; ++i) {
-        snowflakes.push_back(createSnowflake(screenWidth, screenHeight));
-    }
-}
-
-void SnowSystem::initialize(SDL_Renderer* r) {
-    renderer = r;
-    // Create circle textures for each possible radius
-    for (int i = 0; i < 3; ++i) {
-        circleTextures[i] = {
-            createCircleTexture(renderer, i + 1),
-            (i + 1) * 2
-        };
-    }
-}
-
-SnowSystem::~SnowSystem() {
-    for (auto& ct : circleTextures) {
-        if (ct.texture) {
-            SDL_DestroyTexture(ct.texture);
-        }
-    }
 }
 
 void SnowSystem::update(double wind, const Display* display) {
@@ -127,17 +151,14 @@ void SnowSystem::update(double wind, const Display* display) {
             int prevY = static_cast<int>(snow.y);
             snow.y += snow.speed * 0.7f;
             
-            // Update drift with temporal coherence
             float drift_change = distrib_drift_rand(rng);
             snow.drift = std::clamp(snow.drift + drift_change, -1.0f, 1.0f);
             snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 3.0f));
 
-            // Optimized collision detection for particles near the clock plane
             if (std::abs(snow.depth - CLOCK_PLANE_DEPTH) < DEPTH_COLLISION_THRESHOLD) {
                 int currentX = static_cast<int>(snow.x);
                 int currentY = static_cast<int>(snow.y);
                 
-                // Binary search for collision point
                 while (prevY <= currentY) {
                     int midY = (prevY + currentY) / 2;
                     if (display->isPixelOccupied(currentX, midY + snow.radius)) {
@@ -152,58 +173,73 @@ void SnowSystem::update(double wind, const Display* display) {
                 }
             }
 
-            // Simplified rotation
             snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);
 
-            // Screen wrapping
             if (snow.x < -10) snow.x = screenWidth + 10;
             else if (snow.x > screenWidth + 10) snow.x = -10;
 
-            // Reset when below screen
             if (snow.y > screenHeight + 10) {
                 snow = createSnowflake(screenWidth, screenHeight);
                 snow.y = -10;
             }
         }
     }
+    
+    // Update vertex buffers after physics update
+    updateVertexBuffers();
+}
+
+void SnowSystem::updateVertexBuffers() {
+    // Clear batch groups
+    for (int i = 0; i < 3; ++i) {
+        batchGroups[i].vertices.clear();
+        batchGroups[i].count = 0;
+    }
+    
+    // Sort snowflakes by depth for correct rendering
+    std::sort(snowflakes.begin(), snowflakes.end(),
+              [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+    
+    // Update vertex buffers for each snowflake
+    for (const auto& snow : snowflakes) {
+        int batchIndex = snow.radius - 1;
+        auto& group = batchGroups[batchIndex];
+        
+        if (group.count >= MAX_BATCH_SIZE) continue;
+        
+        float size = snow.radius * 2.0f;
+        float depthFactor = (snow.depth + 1.0f) * 0.5f;
+        Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow.alpha * 255);
+        
+        SDL_Color color = {255, 255, 255, alpha};
+        
+        // Add quad vertices
+        SDL_Vertex vertices[4] = {
+            {{snow.x - size, snow.y - size}, color, {0.0f, 0.0f}},
+            {{snow.x + size, snow.y - size}, color, {1.0f, 0.0f}},
+            {{snow.x + size, snow.y + size}, color, {1.0f, 1.0f}},
+            {{snow.x - size, snow.y + size}, color, {0.0f, 1.0f}}
+        };
+        
+        group.vertices.insert(group.vertices.end(), vertices, vertices + 4);
+        group.count++;
+    }
 }
 
 void SnowSystem::draw(SDL_Renderer* renderer) {
-    // Sort snowflakes by depth using insertion sort for small ranges
-    // This is faster than std::sort for mostly-sorted data
-    for (size_t i = 1; i < snowflakes.size(); ++i) {
-        Snowflake key = snowflakes[i];
-        int j = i - 1;
-        while (j >= 0 && snowflakes[j].depth > key.depth) {
-            snowflakes[j + 1] = snowflakes[j];
-            --j;
-        }
-        snowflakes[j + 1] = key;
-    }
-
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     
-    // Batch render snowflakes by radius to minimize texture switches
-    for (int radius = 1; radius <= 3; ++radius) {
-        const auto& circleTexture = circleTextures[radius - 1];
-        SDL_Texture* texture = circleTexture.texture;
+    // Render each batch group
+    for (int i = 0; i < 3; ++i) {
+        const auto& group = batchGroups[i];
+        if (group.count == 0) continue;
         
-        for (const auto& snow : snowflakes) {
-            if (snow.radius != radius) continue;
-            
-            float depthFactor = (snow.depth + 1.0f) * 0.5f;
-            Uint8 alpha = static_cast<Uint8>((0.4f + 0.4f * depthFactor) * snow.alpha * 255);
-            SDL_SetTextureAlphaMod(texture, alpha);
-            
-            SDL_Rect dstRect{
-                static_cast<int>(snow.x - radius),
-                static_cast<int>(snow.y - radius),
-                circleTexture.size,
-                circleTexture.size
-            };
-            
-            SDL_RenderCopy(renderer, texture, nullptr, &dstRect);
-        }
+        SDL_RenderGeometry(renderer,
+                          snowTextures[i],
+                          group.vertices.data(),
+                          group.vertices.size(),
+                          group.indices.data(),
+                          group.count * 6);
     }
     
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
