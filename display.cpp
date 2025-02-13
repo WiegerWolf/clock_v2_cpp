@@ -14,7 +14,7 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), fontExtraSmall(nullptr),
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
     textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0),
-    currentFps(0.0f), showFps(true) {
+    currentFps(0.0f), showFps(false) {
     
     lastFrameTime = std::chrono::high_resolution_clock::now();
     
@@ -312,10 +312,10 @@ void Display::renderFpsCounter() {
     // Position in top-right corner with 10px padding
     int textWidth, textHeight;
     TTF_SizeText(fontSmall, fpsText.c_str(), &textWidth, &textHeight);
-    int x = sizeW - textWidth - 10;
-    int y = 10;
+    int x = sizeW - textWidth;
+    int y = 1;
     
-    renderText(fpsText, fontSmall, white, x + textWidth/2, y + textHeight/2, true);
+    renderText(fpsText, fontExtraSmall, white, x + textWidth/2, y + textHeight/2, true);
 }
 
 void Display::update() {
