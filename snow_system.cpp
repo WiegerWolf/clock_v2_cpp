@@ -58,7 +58,6 @@ namespace {
 
 SnowSystem::SnowSystem(int numFlakes, int width, int height) 
     : screenWidth(width), screenHeight(height), renderer(nullptr) {
-    std::cout << "Initializing snow system with " << numFlakes << " flakes" << std::endl;
     
     snowflakes.reserve(numFlakes);
     for (int i = 0; i < numFlakes; ++i) {
@@ -71,15 +70,6 @@ SnowSystem::SnowSystem(int numFlakes, int width, int height)
         batchGroups[i].indices.reserve(MAX_BATCH_SIZE * 6);   // 6 indices per snowflake
         batchGroups[i].count = 0;
         snowTextures[i] = nullptr;  // Initialize texture pointers to nullptr
-    }
-    
-    std::cout << "Snow system initialized with " << snowflakes.size() << " flakes" << std::endl;
-    // Print first snowflake properties for debugging
-    if (!snowflakes.empty()) {
-        const auto& snow = snowflakes[0];
-        std::cout << "First snowflake: pos=(" << snow.x << "," << snow.y 
-                  << ") radius=" << snow.radius 
-                  << " alpha=" << snow.alpha << std::endl;
     }
 }
 
