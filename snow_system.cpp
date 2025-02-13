@@ -155,7 +155,7 @@ SnowSystem::~SnowSystem() {
 Snowflake SnowSystem::createSnowflake(int width, int height) {
     std::uniform_real_distribution<float> distrib_pos_x(0.0f, static_cast<float>(width));
     std::uniform_real_distribution<float> distrib_pos_y(0.0f, static_cast<float>(height));
-    std::uniform_real_distribution<float> distrib_speed(0.3f, 1.2f);
+    std::uniform_real_distribution<float> distrib_speed(0.8f, 2.0f);  // Increased speed range
     std::uniform_real_distribution<float> distrib_drift(-0.2f, 0.2f);
     std::uniform_real_distribution<float> distrib_alpha(0.4f, 0.9f);  // Increased opacity range
     std::uniform_real_distribution<float> distrib_angle(0.0f, 360.0f);
@@ -209,7 +209,7 @@ void SnowSystem::update(double wind, const Display* display) {
             continue;
         }
 
-        snow.y += snow.speed * 0.7f;
+        snow.y += snow.speed * 1.2f;  // Increased from 0.7f to 1.2f
         
         float drift_change = distrib_drift_rand(rng);
         snow.drift = std::clamp(snow.drift + drift_change, -1.0f, 1.0f);
