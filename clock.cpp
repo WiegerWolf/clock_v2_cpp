@@ -69,6 +69,9 @@ bool Clock::initialize() {
         return false;
     }
 
+    // Hide the mouse cursor
+    SDL_ShowCursor(SDL_DISABLE);
+
     if (IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG) == 0) {
         std::cerr << "IMG_Init Error: " << IMG_GetError() << std::endl;
         SDL_Quit();
@@ -132,6 +135,11 @@ void Clock::handleEvents() {
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             running = false;
+        }
+        else if (event.type == SDL_WINDOWEVENT) {
+            if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+                SDL_ShowCursor(SDL_DISABLE);
+            }
         }
     }
 }
