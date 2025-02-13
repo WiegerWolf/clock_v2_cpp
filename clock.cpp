@@ -20,15 +20,44 @@
 Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice(""), currentWind(0.0) {}
 
 Clock::~Clock() {
-    if (weatherAPI) {
-        weatherAPI->stop();  // Stop weather updates before deletion
-        delete weatherAPI;
+    running = false;  // Stop the main loop first
+    
+    // Delete snow system first since it depends on the renderer
+    if (snow) {
+        delete snow;
+        snow = nullptr;
     }
-    if (display) delete display;
-    if (snow) delete snow;
-    if (backgroundManager) delete backgroundManager;
-    if (renderer) SDL_DestroyRenderer(renderer);
-    if (window) SDL_DestroyWindow(window);
+    
+    // Delete display next as it also uses renderer
+    if (display) {
+        delete display;
+        display = nullptr;
+    }
+    
+    // Stop and delete weather API
+    if (weatherAPI) {
+        weatherAPI->stop();
+        delete weatherAPI;
+        weatherAPI = nullptr;
+    }
+    
+    // Delete background manager
+    if (backgroundManager) {
+        delete backgroundManager;
+        backgroundManager = nullptr;
+    }
+    
+    // Finally clean up SDL resources
+    if (renderer) {
+        SDL_DestroyRenderer(renderer);
+        renderer = nullptr;
+    }
+    
+    if (window) {
+        SDL_DestroyWindow(window);
+        window = nullptr;
+    }
+    
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
@@ -92,7 +121,7 @@ void Clock::run() {
         handleEvents();
         update();
         draw();
-        SDL_Delay(16*4); // ~60 FPS
+        SDL_Delay(16); // ~60 FPS
     }
 }
 
