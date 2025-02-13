@@ -105,7 +105,7 @@ bool Clock::initialize() {
     }
 
     display = new Display(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
-    display->setFpsVisible(false);  // Hide FPS counter
+    display->setFpsVisible(true);  // Hide FPS counter
     
     snow = new SnowSystem(NUM_SNOWFLAKES, SCREEN_WIDTH, SCREEN_HEIGHT);
     snow->initialize(renderer);  // Initialize snow system with renderer
@@ -126,7 +126,6 @@ void Clock::run() {
         handleEvents();
         update();
         draw();
-        SDL_Delay(16); // ~60 FPS
     }
 }
 
