@@ -14,7 +14,7 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), fontExtraSmall(nullptr),
     backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
     textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0),
-    currentFps(0.0f) {
+    currentFps(0.0f), showFps(true) {
     
     lastFrameTime = std::chrono::high_resolution_clock::now();
     
@@ -304,6 +304,8 @@ void Display::updateFpsCounter() {
 }
 
 void Display::renderFpsCounter() {
+    if (!showFps) return;  // Skip rendering if FPS counter is hidden
+    
     std::string fpsText = std::to_string(static_cast<int>(currentFps)) + " FPS";
     SDL_Color white = {255, 255, 255, 255};
     

@@ -66,6 +66,9 @@ public:
     bool hasTextureChanged() const { return textureChanged; }
     void resetTextureChangeFlag() { textureChanged = false; }
 
+    void setFpsVisible(bool visible) { showFps = visible; }
+    bool isFpsVisible() const { return showFps; }
+
     TTF_Font* fontLarge;
     TTF_Font* fontSmall;
     TTF_Font* fontExtraSmall;
@@ -112,6 +115,8 @@ private:
     // Memory management
     size_t estimateTextureMemory(int width, int height);
     void removeOldestTexture();
+
+    bool showFps = false;  // FPS counter visibility flag
 };
 
 #endif // DISPLAY_H
