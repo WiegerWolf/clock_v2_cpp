@@ -198,7 +198,7 @@ void Clock::draw() {
         dateStream.str(),
         display->fontSmall,
         WHITE_COLOR,
-        SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.1
+        SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.075
     );
 
     // Draw weather
@@ -208,7 +208,7 @@ void Clock::draw() {
         currentWeatherData.weathercode,
         currentWeatherData.windspeed
     );
-    int weatherY = SCREEN_HEIGHT * 0.7;
+    int weatherY = SCREEN_HEIGHT * 0.75;
     display->renderText(
         weatherStr,
         display->fontSmall,
