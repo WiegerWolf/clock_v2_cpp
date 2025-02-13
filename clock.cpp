@@ -92,7 +92,7 @@ void Clock::run() {
         handleEvents();
         update();
         draw();
-        SDL_Delay(16*2); // ~60 FPS
+        SDL_Delay(16*4); // ~60 FPS
     }
 }
 
