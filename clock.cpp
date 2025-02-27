@@ -225,7 +225,7 @@ void Clock::draw() {
 
     // Draw clothing advice
     if (!clothingAdvice.empty()) {
-        int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.5;
+        int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.2;
         display->renderMultilineText(
             clothingAdvice,
             display->fontExtraSmall,

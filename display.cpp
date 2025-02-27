@@ -205,7 +205,7 @@ void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_C
     }
 
     auto lines = splitIntoTwoLines(text);
-    int lineHeight = static_cast<int>(TTF_FontLineSkip(font) * lineSpacing);
+    int lineHeight = TTF_FontLineSkip(font); // Removed the lineSpacing multiplier
 
     renderText(lines.first, font, color, centerX, startY);
     renderText(lines.second, font, color, centerX, startY + lineHeight);
