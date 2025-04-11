@@ -61,7 +61,7 @@ std::string getClothingAdvice(double temperature, int weathercode, double windsp
                 "What should I wear? \n"
                 "Please answer in one short sentence, using this locale: " + std::string(language) + ".\n"
                 "Only say what clothes I should wear, there's no need to mention city, current weather or time and date.\n"
-                "Basically, just continue the phrase: You should wear..."
+                "Basically, just continue the phrase: You should wear..., without saying the 'you should wear' part.\n"
             }}
         }}
     };
