@@ -36,3 +36,6 @@ gmon.out
 .vscode/
 *.code-workspace
 .aider*
+
+# Environment variables file
+.env
