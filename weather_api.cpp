@@ -12,8 +12,9 @@
 using json = nlohmann::json;
 using namespace std::chrono_literals;
 
-WeatherAPI::WeatherAPI() 
-    : running(false), lastUpdate(0) {
+// Constructor: Initialize dataInitiallyFetched along with others
+WeatherAPI::WeatherAPI()
+    : running(false), lastUpdate(0), dataInitiallyFetched(false) { // <<< Initialize here
 }
 
 WeatherAPI::~WeatherAPI() {
@@ -40,11 +41,13 @@ WeatherData WeatherAPI::getWeather() const {
     return currentWeatherData;
 }
 
-bool WeatherAPI::shouldUpdate() const {
-    time_t currentTime;
-    time(&currentTime);
-    return difftime(currentTime, lastUpdate) > UPDATE_INTERVAL;
+// Implementation of the new method
+bool WeatherAPI::isDataValid() const {
+    // Read the atomic flag. No lock needed for this specific read.
+    return dataInitiallyFetched.load();
 }
+
+// Note: shouldUpdate() is removed as its logic is now in updateLoop
 
 WeatherData WeatherAPI::fetchWeatherFromAPI() {
     WeatherData result;
@@ -84,31 +87,66 @@ void WeatherAPI::updateLoop() {
     int retryInterval = 1;  // Start with 1 second
 
     while (running) {
-        if (shouldUpdate()) {
+        // Check if we should update based on time interval OR if data was never fetched
+        bool needsUpdate = false;
+        {
+            std::lock_guard<std::mutex> lock(dataMutex); // Lock to read lastUpdate
+            time_t currentTime;
+            time(&currentTime);
+            // Update if data hasn't been fetched yet (lastUpdate == 0) OR if interval passed
+            needsUpdate = (lastUpdate == 0 || difftime(currentTime, lastUpdate) > UPDATE_INTERVAL);
+        } // Lock released
+
+
+        if (needsUpdate) {
             WeatherData newData = fetchWeatherFromAPI();
-            
+
             if (newData.weathercode != -1) {
                 // Successful update
-                std::lock_guard<std::mutex> lock(dataMutex);
-                currentWeatherData = newData;
-                time(&lastUpdate);
+                { // Scope for lock guard
+                    std::lock_guard<std::mutex> lock(dataMutex);
+                    currentWeatherData = newData;
+                    time(&lastUpdate);
+                    // Set the flag only after the first successful fetch
+                    if (!dataInitiallyFetched.load(std::memory_order_relaxed)) { // Relaxed is fine for a flag
+                         dataInitiallyFetched.store(true, std::memory_order_release); // Ensure writes are visible
+                    }
+                } // Lock released
                 retryInterval = 1;  // Reset retry interval on success
+                // updateCV.notify_one(); // Notify potentially waiting threads (optional, none currently wait on this)
             } else {
                 // Failed update
                 retryInterval = std::min(retryInterval * 2, MAX_RETRY_INTERVAL);
                 std::cerr << "Weather update failed, retrying in " << retryInterval << " seconds" << std::endl;
-                
+
                 // Wait for retry interval or until stopped
-                std::unique_lock<std::mutex> lock(dataMutex);
-                updateCV.wait_for(lock, std::chrono::seconds(retryInterval), 
-                    [this]() { return !running; });
-                continue;
+                std::unique_lock<std::mutex> lock(dataMutex); // Use unique_lock for condition variable
+                updateCV.wait_for(lock, std::chrono::seconds(retryInterval),
+                    [this]() { return !running; }); // Wait or until stop() is called
+                continue; // Skip the main wait below, go straight to next loop iteration
             }
         }
-        
-        // Wait for next update interval or until stopped
-        std::unique_lock<std::mutex> lock(dataMutex);
-        updateCV.wait_for(lock, std::chrono::seconds(UPDATE_INTERVAL), 
-            [this]() { return !running || shouldUpdate(); });
+
+        // Wait until the next update is needed OR until stop() is called
+        std::unique_lock<std::mutex> lock(dataMutex); // Use unique_lock for condition variable
+        // Calculate time until next update is needed based on last successful update
+        time_t currentTime;
+        time(&currentTime);
+        double secondsToWait = UPDATE_INTERVAL; // Default wait if no data yet
+        if (lastUpdate != 0) { // Avoid negative wait time if lastUpdate is 0
+             // Calculate remaining time, ensure it's not negative
+             secondsToWait = std::max(0.0, UPDATE_INTERVAL - difftime(currentTime, lastUpdate));
+        }
+
+        // Wait for the calculated duration OR until stop() is called OR until an update is needed (e.g., if interval passed while waiting)
+        updateCV.wait_for(lock, std::chrono::seconds(static_cast<long long>(secondsToWait) + 1), // Add 1s buffer for safety
+            [this]() {
+                // Wake up if stop() was called
+                if (!running) return true;
+                // Wake up if it's time for the next update (check again under lock)
+                time_t now;
+                time(&now);
+                return lastUpdate == 0 || difftime(now, lastUpdate) > UPDATE_INTERVAL;
+             });
     }
 }
