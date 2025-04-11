@@ -14,11 +14,13 @@ const int SCREEN_HEIGHT = 600;
 // Colors
 const SDL_Color WHITE_COLOR = {255, 255, 255, 255};
 const SDL_Color BLACK_COLOR = {0, 0, 0, 255};
-const SDL_Color SHADOW_COLOR = {0, 0, 0, 150}; // Semi-transparent black for shadow
+const SDL_Color SHADOW_COLOR = {0, 0, 0, 30}; // Much lower alpha for soft shadow layering
 
 // Text Shadow configuration
-const int SHADOW_OFFSET_X = 2;
-const int SHADOW_OFFSET_Y = 2;
+// const int SHADOW_OFFSET_X = 2; // Removed
+// const int SHADOW_OFFSET_Y = 2; // Removed
+const int SHADOW_RADIUS = 3;       // Radius for the soft shadow spread (adjust as needed)
+const int SHADOW_SAMPLES = 8;      // Number of layers for the soft shadow (adjust for quality/performance)
 
 // Snow configuration
 const int NUM_SNOWFLAKES = 1000;  // Increased number of snowflakes

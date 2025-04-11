@@ -9,6 +9,7 @@
 #include <climits>
 #include <cstring>
 #include <algorithm>
+#include <cmath> // Needed for sin and cos
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
     : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), fontExtraSmall(nullptr),
@@ -180,29 +181,37 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
         cachedRect.h
     };
 
-    // --- Render Shadow ---
-    SDL_Rect shadowDestRect = {
-        destRect.x + SHADOW_OFFSET_X,
-        destRect.y + SHADOW_OFFSET_Y,
-        destRect.w,
-        destRect.h
-    };
-    // Set shadow color modulation (using black)
+    // --- Render Soft Shadow ---
+    // Set shadow color modulation and alpha once
     SDL_SetTextureColorMod(texture, SHADOW_COLOR.r, SHADOW_COLOR.g, SHADOW_COLOR.b);
-    SDL_SetTextureAlphaMod(texture, SHADOW_COLOR.a); // Use shadow alpha
+    SDL_SetTextureAlphaMod(texture, SHADOW_COLOR.a); // Use the low shadow alpha
 
-    // Render shadow to text capture if needed
-    if (isDynamic) {
-        SDL_SetRenderTarget(renderer, textCapture);
+    // Render multiple times in a circle for a soft effect
+    for (int i = 0; i < SHADOW_SAMPLES; ++i) {
+        double angle = 2.0 * M_PI * i / SHADOW_SAMPLES;
+        int offsetX = static_cast<int>(SHADOW_RADIUS * cos(angle));
+        int offsetY = static_cast<int>(SHADOW_RADIUS * sin(angle));
+
+        SDL_Rect shadowDestRect = {
+            destRect.x + offsetX,
+            destRect.y + offsetY,
+            destRect.w,
+            destRect.h
+        };
+
+        // Render shadow sample to text capture if needed
+        if (isDynamic) {
+            SDL_SetRenderTarget(renderer, textCapture);
+            SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
+        }
+        // Render shadow sample to main screen
+        SDL_SetRenderTarget(renderer, mainTarget);
         SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
     }
-    // Render shadow to main screen
-    SDL_SetRenderTarget(renderer, mainTarget);
-    SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
 
     // Reset color and alpha modulation for main text
-    SDL_SetTextureColorMod(texture, 255, 255, 255);
-    SDL_SetTextureAlphaMod(texture, color.a); // Use original text alpha
+    SDL_SetTextureColorMod(texture, 255, 255, 255); // Reset color to white
+    SDL_SetTextureAlphaMod(texture, color.a);       // Use original text alpha
 
     // --- Render Main Text ---
     // Render main text to text capture if needed
