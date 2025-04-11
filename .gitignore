@@ -35,3 +35,4 @@ gmon.out
 .idea/
 .vscode/
 *.code-workspace
+.aider*
