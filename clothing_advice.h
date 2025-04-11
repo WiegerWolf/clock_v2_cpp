@@ -4,7 +4,8 @@
 
 #include <string>
 
-std::string getClothingAdvice(double temperature, int weathercode, double windspeed, const char* apiKey, const char* language = "ru");
+// Updated function signature: apiKey parameter removed
+std::string getClothingAdvice(double temperature, int weathercode, double windspeed, const char* language = "ru");
 std::string getBasicAdvice(double temperature);
 
 #endif // CLOTHING_ADVICE_H
