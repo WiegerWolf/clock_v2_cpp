@@ -17,10 +17,10 @@ endif()
 # Enable Link Time Optimization
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
-# Option to provide LLM API Key at compile time
-option(LLM_API_KEY "Provide the LLM API Key" "")
-if(NOT LLM_API_KEY)
-    message(FATAL_ERROR "LLM_API_KEY must be provided via CMake options, e.g., -DLLM_API_KEY='your-key'")
+# Option to provide OpenRouter API Key at compile time
+option(OPENROUTER_API_KEY_DEFINE "Provide the OpenRouter API Key" "")
+if(NOT OPENROUTER_API_KEY_DEFINE)
+    message(FATAL_ERROR "OPENROUTER_API_KEY_DEFINE must be provided via CMake options, e.g., -DOPENROUTER_API_KEY_DEFINE='your-key'")
 endif()
 
 find_package(SDL2 REQUIRED)
@@ -63,7 +63,7 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::Crypto
     Threads::Threads)
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE 
+target_compile_definitions(${PROJECT_NAME} PRIVATE
     CPPHTTPLIB_OPENSSL_SUPPORT
-    CLOTHING_ADVICE_API_KEY_DEFINE="${LLM_API_KEY}"
+    OPENROUTER_API_KEY_DEFINE="${OPENROUTER_API_KEY_DEFINE}"
 )
