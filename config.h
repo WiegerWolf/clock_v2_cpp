@@ -14,6 +14,11 @@ const int SCREEN_HEIGHT = 600;
 // Colors
 const SDL_Color WHITE_COLOR = {255, 255, 255, 255};
 const SDL_Color BLACK_COLOR = {0, 0, 0, 255};
+const SDL_Color SHADOW_COLOR = {0, 0, 0, 150}; // Semi-transparent black for shadow
+
+// Text Shadow configuration
+const int SHADOW_OFFSET_X = 2;
+const int SHADOW_OFFSET_Y = 2;
 
 // Snow configuration
 const int NUM_SNOWFLAKES = 1000;  // Increased number of snowflakes

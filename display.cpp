@@ -180,13 +180,37 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
         cachedRect.h
     };
 
-    // For dynamic text or if we need collision detection, render to text capture
+    // --- Render Shadow ---
+    SDL_Rect shadowDestRect = {
+        destRect.x + SHADOW_OFFSET_X,
+        destRect.y + SHADOW_OFFSET_Y,
+        destRect.w,
+        destRect.h
+    };
+    // Set shadow color modulation (using black)
+    SDL_SetTextureColorMod(texture, SHADOW_COLOR.r, SHADOW_COLOR.g, SHADOW_COLOR.b);
+    SDL_SetTextureAlphaMod(texture, SHADOW_COLOR.a); // Use shadow alpha
+
+    // Render shadow to text capture if needed
+    if (isDynamic) {
+        SDL_SetRenderTarget(renderer, textCapture);
+        SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
+    }
+    // Render shadow to main screen
+    SDL_SetRenderTarget(renderer, mainTarget);
+    SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
+
+    // Reset color and alpha modulation for main text
+    SDL_SetTextureColorMod(texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(texture, color.a); // Use original text alpha
+
+    // --- Render Main Text ---
+    // Render main text to text capture if needed
     if (isDynamic) {
         SDL_SetRenderTarget(renderer, textCapture);
         SDL_RenderCopy(renderer, texture, nullptr, &destRect);
     }
-    
-    // Render to screen
+    // Render main text to screen
     SDL_SetRenderTarget(renderer, mainTarget);
     SDL_RenderCopy(renderer, texture, nullptr, &destRect);
 
