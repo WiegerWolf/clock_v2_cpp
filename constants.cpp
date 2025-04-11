@@ -8,9 +8,9 @@ const char* OPENROUTER_API_KEY = OPENROUTER_API_KEY_DEFINE;
 const char* OPENROUTER_API_HOST = "openrouter.ai";
 const int OPENROUTER_API_PORT = 443;
 const char* OPENROUTER_API_PATH = "/api/v1/chat/completions";
-const char* OPENROUTER_MODEL = "google/gemini-2.0-flash-lite-001"; // Using gemini-flash-1.5 as requested
-const char* OPENROUTER_REFERER = "https://clock.tsatsin.com"; // Optional: Change to your site URL
-const char* OPENROUTER_TITLE = "Digital clock";         // Optional: Change to your site name
+const char* OPENROUTER_MODEL = "google/gemini-2.0-flash-lite-001";
+const char* OPENROUTER_REFERER = "https://clock.tsatsin.com";
+const char* OPENROUTER_TITLE = "Digital clock";
 const char* CLOTHING_ADVICE_LANGUAGE = "ru";
 
 // --- Background Image Configuration ---

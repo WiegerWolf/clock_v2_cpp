@@ -16,12 +16,30 @@ sudo apt install -y cmake gcc make g++ libsdl2-dev \
 
 ## Build Steps
 
+Add .env file to the root of the project with the following content:
+
 ```bash
-mkdir build
-cd build
-cmake .. 
-make
+OPENROUTER_API_KEY='your_api_key'
 ```
+
+Then run the following command:
+
+```bash
+./build.sh
+```
+
+## Deployment
+
+Make sure you have the following structure:
+
+```bash
+/home/n
+├── digital_clock
+├── assets/fonts/*.ttf
+```
+
+You get the `./digital_clock` file from the build step.
+You get the `assets` folder (with fonts included) from the `git clone` step.
 
 ## Autostart
 
