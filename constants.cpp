@@ -1,11 +1,19 @@
 #include "constants.h"
 
-#ifndef CLOTHING_ADVICE_API_KEY_DEFINE                                                                                 
-#error "CLOTHING_ADVICE_API_KEY_DEFINE is not set. Provide it via CMake -DLLM_API_KEY='your-key'"                      
-#endif                                                                                                                 
-const char* CLOTHING_ADVICE_API_KEY = CLOTHING_ADVICE_API_KEY_DEFINE;                                                  
+// --- LLM Configuration (OpenRouter) ---
+#ifndef OPENROUTER_API_KEY_DEFINE
+#error "OPENROUTER_API_KEY_DEFINE is not set. Provide it via CMake -DOPENROUTER_API_KEY_DEFINE='your-key'"
+#endif
+const char* OPENROUTER_API_KEY = OPENROUTER_API_KEY_DEFINE;
+const char* OPENROUTER_API_HOST = "openrouter.ai";
+const int OPENROUTER_API_PORT = 443;
+const char* OPENROUTER_API_PATH = "/api/v1/chat/completions";
+const char* OPENROUTER_MODEL = "google/gemini-flash-1.5"; // Using gemini-flash-1.5 as requested
+const char* OPENROUTER_REFERER = "http://localhost"; // Optional: Change to your site URL
+const char* OPENROUTER_TITLE = "SmartClock";         // Optional: Change to your site name
 const char* CLOTHING_ADVICE_LANGUAGE = "ru";
 
+// --- Background Image Configuration ---
 const char* BACKGROUND_API_URL_HOST = "peapix.com";
 const int BACKGROUND_API_URL_PORT = 443;
 const char* BACKGROUND_API_URL_PATH = "/bing/feed?country=us";

@@ -1,8 +1,17 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-extern const char* CLOTHING_ADVICE_API_KEY;
+// LLM Configuration (OpenRouter)
+extern const char* OPENROUTER_API_KEY;
+extern const char* OPENROUTER_API_HOST;
+extern const int OPENROUTER_API_PORT;
+extern const char* OPENROUTER_API_PATH;
+extern const char* OPENROUTER_MODEL;
+extern const char* OPENROUTER_REFERER; // Optional: Your site URL for rankings
+extern const char* OPENROUTER_TITLE;   // Optional: Your site name for rankings
 extern const char* CLOTHING_ADVICE_LANGUAGE;
+
+// Background Image Configuration
 extern const char* BACKGROUND_API_URL_HOST;
 extern const int BACKGROUND_API_URL_PORT;
 extern const char* BACKGROUND_API_URL_PATH;
