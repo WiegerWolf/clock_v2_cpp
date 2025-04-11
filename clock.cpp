@@ -158,15 +158,23 @@ void Clock::update() {
     snow->update(currentWind, display);
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    if (shouldUpdateAdvice()) {
-        WeatherData currentWeatherData = weatherAPI->getWeather();
-        clothingAdvice = getClothingAdvice(
-            currentWeatherData.temperature,
-            currentWeatherData.weathercode,
-            currentWeatherData.windspeed,
-            CLOTHING_ADVICE_LANGUAGE
-        );
-        time(&lastAdviceUpdate);
+    // Check if weather data is valid *before* deciding to update advice
+    if (weatherAPI->isDataValid()) {
+        // Only update advice if data is valid AND the interval has passed
+        if (shouldUpdateAdvice()) {
+            WeatherData currentWeatherData = weatherAPI->getWeather();
+            clothingAdvice = getClothingAdvice(
+                currentWeatherData.temperature,
+                currentWeatherData.weathercode,
+                currentWeatherData.windspeed,
+                CLOTHING_ADVICE_LANGUAGE
+            );
+            time(&lastAdviceUpdate); // Update timestamp only after successful advice fetch
+        }
+    } else if (clothingAdvice.empty()) {
+        // Optional: Set a temporary message while waiting for the first fetch
+        // This prevents showing nothing while waiting for the initial data.
+        clothingAdvice = "Получение данных..."; // Or "Loading data..."
     }
 }
 
