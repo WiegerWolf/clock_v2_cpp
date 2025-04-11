@@ -17,6 +17,12 @@ endif()
 # Enable Link Time Optimization
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+# Option to provide LLM API Key at compile time
+option(LLM_API_KEY "Provide the LLM API Key" "")
+if(NOT LLM_API_KEY)
+    message(FATAL_ERROR "LLM_API_KEY must be provided via CMake options, e.g., -DLLM_API_KEY='your-key'")
+endif()
+
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
 find_package(SDL2_ttf REQUIRED)
@@ -57,4 +63,7 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::Crypto
     Threads::Threads)
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_definitions(${PROJECT_NAME} PRIVATE 
+    CPPHTTPLIB_OPENSSL_SUPPORT
+    CLOTHING_ADVICE_API_KEY_DEFINE="${LLM_API_KEY}"
+)
