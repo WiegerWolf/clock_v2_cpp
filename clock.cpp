@@ -164,7 +164,6 @@ void Clock::update() {
             currentWeatherData.temperature,
             currentWeatherData.weathercode,
             currentWeatherData.windspeed,
-            CLOTHING_ADVICE_API_KEY,
             CLOTHING_ADVICE_LANGUAGE
         );
         time(&lastAdviceUpdate);
