@@ -50,6 +50,7 @@ add_executable(${PROJECT_NAME}
     clothing_advice.cpp
     background_manager.cpp
     constants.cpp
+    config.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} 
