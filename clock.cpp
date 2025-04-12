@@ -182,11 +182,14 @@ void Clock::update() {
 void Clock::draw() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-     
+
+    // Draw background first
     backgroundManager->draw(renderer);
-     
+
+    // Draw snow on top of background
+    snow->draw(renderer);
+
     // Text capture removed - Draw directly to the main target
-      
     // Draw all text elements
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
@@ -239,8 +242,6 @@ void Clock::draw() {
             1.2f
         );
     }
-    // Draw snow after text elements, before FPS counter
-    snow->draw(renderer);
 
     // Text capture removed
     // No need to reset texture change flag
