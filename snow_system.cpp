@@ -11,13 +11,16 @@
 // Helper to create snowflake textures (used during initialization)
 // Moved inside the class in the header, or keep as static helper if preferred
 // For simplicity, let's make it a private member function or keep it static here.
-// Keeping it static here for minimal changes to the call sites.
+// Keeping it static here for minimal changes to the call sites. // <-- Comment is now inaccurate, function moved below
 namespace {
-    // Static helper remains valid
-    static SDL_Texture* createCircleTexture(SDL_Renderer* renderer, int radius, Uint8 alpha = 255) {
-        const int diameter = radius * 2 + 2; // Add padding for smoother edges
-        SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(
-            0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
+    // Anonymous namespace is now empty or can be removed if nothing else uses it.
+} // End of anonymous namespace
+
+// Define createCircleTexture as a member function of SnowSystem
+SDL_Texture* SnowSystem::createCircleTexture(SDL_Renderer* renderer, int radius, Uint8 alpha) {
+    const int diameter = radius * 2 + 2; // Add padding for smoother edges
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(
+        0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
         );
         
         // Removed duplicate line: 0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
@@ -59,8 +62,8 @@ namespace {
         }
 
         return texture;
-    } // End of createCircleTexture function
-} // End of anonymous namespace
+} // End of SnowSystem::createCircleTexture function
+
 
 SnowSystem::SnowSystem(int flakes, int width, int height)
     : numFlakes(flakes), screenWidth(width), screenHeight(height), renderer(nullptr),
