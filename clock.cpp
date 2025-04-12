@@ -126,6 +126,7 @@ void Clock::run() {
         handleEvents();
         update();
         draw();
+        SDL_Delay(1); // Add a small delay to prevent busy-waiting
     }
 }
 

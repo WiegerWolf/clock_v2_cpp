@@ -27,22 +27,19 @@ namespace {
         SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
         SDL_FillRect(surface, NULL, SDL_MapRGBA(surface->format, 0, 0, 0, 0));
 
-        // Draw circle - simple filled circle for performance during pre-render
+        // Draw circle - DEBUG: Draw a simple opaque white circle
         Sint16 centerX = radius + 1;
         Sint16 centerY = radius + 1;
+        Uint32 whiteOpaque = SDL_MapRGBA(surface->format, 255, 255, 255, 255); // Opaque white
         for (int y = -radius; y <= radius; ++y) {
             for (int x = -radius; x <= radius; ++x) {
                 if (x*x + y*y <= radius*radius) {
-                    // Simple alpha blending calculation (approximate)
-                    float dist = std::sqrt(static_cast<float>(x*x + y*y));
-                    float edgeFactor = std::max(0.0f, 1.0f - (dist / radius)); // 1 at center, 0 at edge
-                    Uint8 pixelAlpha = static_cast<Uint8>(alpha * edgeFactor * edgeFactor); // Smoother falloff
-
-                    Uint32* target_pixel = static_cast<Uint32*>(surface->pixels) + (centerY + y) * surface->pitch / 4 + (centerX + x);
-                    *target_pixel = SDL_MapRGBA(surface->format, 255, 255, 255, pixelAlpha);
+                     Uint32* target_pixel = static_cast<Uint32*>(surface->pixels) + (centerY + y) * surface->pitch / 4 + (centerX + x);
+                    *target_pixel = whiteOpaque;
                 }
             }
         }
+        // End DEBUG section
 
         // SDL_UnlockSurface(surface); // Not needed for software surface manipulation
 
