@@ -16,8 +16,7 @@ namespace {
             0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
         );
         
-            0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
-        );
+        // Removed duplicate line: 0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
 
         if (!surface) {
             std::cerr << "Failed to create surface for snow texture: " << SDL_GetError() << std::endl;
