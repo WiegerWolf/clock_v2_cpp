@@ -228,11 +228,18 @@ void SnowSystem::initialize(SDL_Renderer* r) {
         // Set the final texture's blend mode to BLEND *before* rendering onto it
         SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND);
         SDL_SetRenderTarget(renderer, finalFrameTexture); // Set target to the new texture
- 
-        // Simply copy from the intermediate target. Renderer blend mode shouldn't affect this when target is set.
+
+        // Set blend mode to NONE for direct pixel copy from intermediate target
+        SDL_BlendMode oldBlendMode;
+        SDL_GetRenderDrawBlendMode(renderer, &oldBlendMode);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
         SDL_RenderCopy(renderer, frameTarget, nullptr, nullptr); // Copy from the intermediate target
- 
-        // Reset target. Blend mode is already set to BLEND above, ready for drawing later.
+
+        // Restore previous blend mode
+        SDL_SetRenderDrawBlendMode(renderer, oldBlendMode);
+
+        // Reset target. Blend mode for finalFrameTexture is already set to BLEND above.
         SDL_SetRenderTarget(renderer, nullptr);
  
         preRenderedFrames.push_back(finalFrameTexture);

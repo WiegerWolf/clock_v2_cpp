@@ -126,7 +126,7 @@ void Clock::run() {
         handleEvents();
         update();
         draw();
-        SDL_Delay(1); // Add a small delay to prevent busy-waiting
+        // SDL_Delay(1); // Removed: VSync should handle frame pacing
     }
 }
 
