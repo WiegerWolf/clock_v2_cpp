@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 #include <vector> // Ensure vector is included
+#include <cmath> // For cosf and M_PI
 
 namespace {
     std::mt19937 rng{std::random_device{}()};
@@ -327,9 +328,11 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
 
     if (FADE_FRAMES > 0 && currentFrameIndex >= fadeStartIndex) {
         // --- Fading Period ---
-        // Calculate blend factor (0.0 at fadeStartIndex, approaches 1.0 at totalFrames-1)
-        float alphaBlend = static_cast<float>(currentFrameIndex - fadeStartIndex) / FADE_FRAMES;
-        alphaBlend = std::clamp(alphaBlend, 0.0f, 1.0f); // Ensure it stays within [0, 1]
+        // Calculate blend factor using cosine easing for a smoother transition
+        float progress = static_cast<float>(currentFrameIndex - fadeStartIndex) / FADE_FRAMES;
+        progress = std::clamp(progress, 0.0f, 1.0f); // Ensure progress stays within [0, 1]
+        // Cosine easing (in-out): starts slow, accelerates, ends slow
+        float alphaBlend = 0.5f * (1.0f - cosf(progress * M_PI));
 
         // Get the corresponding frame from the beginning of the loop
         int loopFrameIndex = currentFrameIndex - fadeStartIndex;
