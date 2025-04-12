@@ -222,68 +222,10 @@ void SnowSystem::initialize(SDL_Renderer* r) {
         }
     }
 
-    // --- Create Seamless Loop ---
-    // The 'snowflakes' vector now holds the state *after* the last frame's simulation.
-    // Render one more frame using this state and replace frame 0 with it.
-    // We need the original snowTextures here, so cleanup is moved after this block.
-    std::cout << "Creating seamless loop frame..." << std::endl;
-    SDL_Texture* loopFrameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                      SDL_TEXTUREACCESS_TARGET,
-                                                      screenWidth, screenHeight);
-    if (!loopFrameTexture) {
-        std::cerr << "Failed to create loop frame texture: " << SDL_GetError() << std::endl;
-        // Handle error: maybe skip looping or cleanup partially rendered frames?
-    } else {
-        SDL_SetTextureBlendMode(loopFrameTexture, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderTarget(renderer, loopFrameTexture);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Clear with transparency
-        SDL_RenderClear(renderer);
+    // Seamless loop is now handled by fading in the draw function.
+    // No need to replace frame 0 here.
 
-        // Draw the final snowflake state to the loop frame texture
-        // Sort by depth again just in case (though state hasn't changed since last sort)
-        std::sort(snowflakes.begin(), snowflakes.end(),
-                  [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
-
-        // Use the original snowTextures array (cleanup moved below)
-        // The snowTextures array (containing snowTexSmall, snowTexMedium, snowTexLarge)
-        // is still in scope here because we moved its cleanup.
-        for (const auto& snow : snowflakes) {
-            int texIndex = snow.radius - 2;
-            if (texIndex < 0 || texIndex > 2) continue;
-
-            // Use the original textures created before the main loop
-            SDL_Texture* currentSnowTex = snowTextures[texIndex];
-                int texW, texH;
-                SDL_QueryTexture(currentSnowTex, NULL, NULL, &texW, &texH);
-
-                SDL_Rect destRect = {
-                    static_cast<int>(snow.x - texW / 2.0f),
-                    static_cast<int>(snow.y - texH / 2.0f),
-                    texW,
-                    texH
-                };
-                SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255);
-                SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
-                SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
-            }
-
-            // No need to clean up temporary loop textures as we used the originals
-
-            SDL_SetRenderTarget(renderer, nullptr); // Reset render target
-
-            // Replace the original frame 0
-            if (!preRenderedFrames.empty() && preRenderedFrames[0]) {
-                SDL_DestroyTexture(preRenderedFrames[0]);
-                preRenderedFrames[0] = loopFrameTexture;
-                std::cout << "Frame 0 replaced for seamless loop." << std::endl;
-            } else {
-                 std::cerr << "Error: Could not replace frame 0 for looping." << std::endl;
-                 SDL_DestroyTexture(loopFrameTexture); // Clean up unused loop frame
-            }
-        }
-    // --- End Seamless Loop Creation ---
-
-    // 5. Cleanup temporary resources (base snowflake textures) - Now done AFTER loop creation
+    // 5. Cleanup temporary resources (base snowflake textures)
     SDL_DestroyTexture(snowTexSmall);
     SDL_DestroyTexture(snowTexMedium);
     SDL_DestroyTexture(snowTexLarge);
@@ -310,14 +252,51 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
 
     // --- DEBUG code removed ---
 
-    // Original code restored:
-    SDL_Texture* currentFrame = preRenderedFrames[currentFrameIndex];
-    if (currentFrame) {
-        // Ensure blend mode is set correctly for rendering the transparent frame
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_Texture* currentFrameTexture = preRenderedFrames[currentFrameIndex];
+    if (!currentFrameTexture) return;
+
+    // Ensure blend mode is set correctly for rendering the transparent frame(s)
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    // Calculate the start index for fading
+    int fadeStartIndex = totalFrames - FADE_FRAMES;
+
+    if (FADE_FRAMES > 0 && currentFrameIndex >= fadeStartIndex) {
+        // --- Fading Period ---
+        // Calculate blend factor (0.0 at fadeStartIndex, approaches 1.0 at totalFrames-1)
+        float alphaBlend = static_cast<float>(currentFrameIndex - fadeStartIndex) / FADE_FRAMES;
+        alphaBlend = std::clamp(alphaBlend, 0.0f, 1.0f); // Ensure it stays within [0, 1]
+
+        // Get the corresponding frame from the beginning of the loop
+        int loopFrameIndex = currentFrameIndex - fadeStartIndex;
+        // Ensure loopFrameIndex is valid
+        if (loopFrameIndex < 0 || loopFrameIndex >= preRenderedFrames.size()) {
+             loopFrameIndex = 0; // Fallback, though shouldn't be needed
+        }
+        SDL_Texture* loopFrameTexture = preRenderedFrames[loopFrameIndex];
+
+        if (loopFrameTexture) {
+            // 1. Draw the current frame (fading out)
+            SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
+            SDL_SetTextureAlphaMod(currentFrameTexture, static_cast<Uint8>((1.0f - alphaBlend) * 255.0f));
+            SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
+
+            // 2. Draw the corresponding loop frame (fading in) on top
+            SDL_SetTextureColorMod(loopFrameTexture, 255, 255, 255);
+            SDL_SetTextureAlphaMod(loopFrameTexture, static_cast<Uint8>(alphaBlend * 255.0f));
+            SDL_RenderCopy(renderer, loopFrameTexture, nullptr, nullptr);
+        } else {
+            // Fallback if loop frame is missing: just draw current frame fully opaque
+            SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
+            SDL_SetTextureAlphaMod(currentFrameTexture, 255);
+            SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
+        }
+
+    } else {
+        // --- Normal Period (No Fading) ---
         // Explicitly reset color and alpha modulation for the pre-rendered frame texture
-        SDL_SetTextureColorMod(currentFrame, 255, 255, 255);
-        SDL_SetTextureAlphaMod(currentFrame, 255);
-        SDL_RenderCopy(renderer, currentFrame, nullptr, nullptr);
+        SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
+        SDL_SetTextureAlphaMod(currentFrameTexture, 255);
+        SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
     }
 }

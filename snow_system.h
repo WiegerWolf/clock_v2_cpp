@@ -46,6 +46,7 @@ private:
     // Constants for pre-rendering
     static const int PRE_RENDER_SECONDS = 30; // Duration of the animation loop
     static const int PRE_RENDER_FPS = 30;     // FPS for the pre-rendered animation
+    static const int FADE_FRAMES = PRE_RENDER_FPS * 1; // 1 second fade duration
 };
 
 #endif // SNOW_SYSTEM_H
