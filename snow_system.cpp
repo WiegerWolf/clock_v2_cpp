@@ -325,22 +325,11 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
 
     // Calculate the start and end indices for fading periods
     int fadeStartIndex = totalFrames - FADE_FRAMES;
-    int fadeInEndIndex = FADE_FRAMES; // Frame index after which initial fade-in is complete
+    // int fadeInEndIndex = FADE_FRAMES; // Removed - No initial fade-in needed
 
-    if (FADE_FRAMES > 0 && currentFrameIndex < fadeInEndIndex) {
-        // --- Initial Fade-In Period ---
-        // Calculate blend factor (0.0 at frame 0, approaches 1.0 at FADE_FRAMES - 1)
-        float progress = static_cast<float>(currentFrameIndex) / FADE_FRAMES;
-        progress = std::clamp(progress, 0.0f, 1.0f);
-        // Use cosine easing for smooth fade-in
-        float alphaBlend = 0.5f * (1.0f - cosf((1.0f - progress) * M_PI)); // Fade in from 0 to 1
+    // Removed initial fade-in block
 
-        // Render the current frame with calculated alpha
-        SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
-        SDL_SetTextureAlphaMod(currentFrameTexture, static_cast<Uint8>(alphaBlend * 255.0f));
-        SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
-
-    } else if (FADE_FRAMES > 0 && currentFrameIndex >= fadeStartIndex) {
+    if (FADE_FRAMES > 0 && currentFrameIndex >= fadeStartIndex) {
         // --- Crossfade Period (End of Loop) ---
         // Calculate blend factor using cosine easing for a smoother transition
         float progress = static_cast<float>(currentFrameIndex - fadeStartIndex) / FADE_FRAMES;
