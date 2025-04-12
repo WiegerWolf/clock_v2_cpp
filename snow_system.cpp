@@ -33,10 +33,8 @@ namespace {
         for (int y = -radius; y <= radius; ++y) {
             for (int x = -radius; x <= radius; ++x) {
                 if (x*x + y*y <= radius*radius) {
-                    // Simple alpha blending calculation (approximate)
-                    float dist = std::sqrt(static_cast<float>(x*x + y*y));
-                    float edgeFactor = std::max(0.0f, 1.0f - (dist / radius)); // 1 at center, 0 at edge
-                    Uint8 pixelAlpha = static_cast<Uint8>(alpha * edgeFactor * edgeFactor); // Smoother falloff
+                    // Draw solid white pixel with the provided base alpha
+                    Uint8 pixelAlpha = alpha; // Use the alpha passed to the function (or 255 for fully opaque)
 
                     Uint32* target_pixel = static_cast<Uint32*>(surface->pixels) + (centerY + y) * surface->pitch / 4 + (centerX + x);
                     *target_pixel = SDL_MapRGBA(surface->format, 255, 255, 255, pixelAlpha);
