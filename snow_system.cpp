@@ -221,7 +221,81 @@ void SnowSystem::initialize(SDL_Renderer* r) {
              std::cout << "Pre-rendered " << (frame + 1) / PRE_RENDER_FPS << " seconds..." << std::endl;
         }
     }
- 
+
+    // --- Create Seamless Loop ---
+    // The 'snowflakes' vector now holds the state *after* the last frame's simulation.
+    // Render one more frame using this state and replace frame 0 with it.
+    std::cout << "Creating seamless loop frame..." << std::endl;
+    SDL_Texture* loopFrameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                                      SDL_TEXTUREACCESS_TARGET,
+                                                      screenWidth, screenHeight);
+    if (!loopFrameTexture) {
+        std::cerr << "Failed to create loop frame texture: " << SDL_GetError() << std::endl;
+        // Handle error: maybe skip looping or cleanup partially rendered frames?
+    } else {
+        SDL_SetTextureBlendMode(loopFrameTexture, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderTarget(renderer, loopFrameTexture);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Clear with transparency
+        SDL_RenderClear(renderer);
+
+        // Draw the final snowflake state to the loop frame texture
+        // Sort by depth again just in case (though state hasn't changed since last sort)
+        std::sort(snowflakes.begin(), snowflakes.end(),
+                  [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+
+        // Need the snowTextures array here again, or pass it, or recreate briefly?
+        // Recreating briefly is simpler for this isolated block.
+        SDL_Texture* snowTexSmallLoop = createCircleTexture(renderer, 2, 200);
+        SDL_Texture* snowTexMediumLoop = createCircleTexture(renderer, 3, 220);
+        SDL_Texture* snowTexLargeLoop = createCircleTexture(renderer, 4, 240);
+        if (!snowTexSmallLoop || !snowTexMediumLoop || !snowTexLargeLoop) {
+             std::cerr << "Failed to create temp textures for loop frame." << std::endl;
+             SDL_DestroyTexture(loopFrameTexture); // Clean up loop frame texture
+             if(snowTexSmallLoop) SDL_DestroyTexture(snowTexSmallLoop);
+             if(snowTexMediumLoop) SDL_DestroyTexture(snowTexMediumLoop);
+             if(snowTexLargeLoop) SDL_DestroyTexture(snowTexLargeLoop);
+        } else {
+            SDL_Texture* snowTexturesLoop[] = { snowTexSmallLoop, snowTexMediumLoop, snowTexLargeLoop };
+
+            for (const auto& snow : snowflakes) {
+                int texIndex = snow.radius - 2;
+                if (texIndex < 0 || texIndex > 2) continue;
+
+                SDL_Texture* currentSnowTex = snowTexturesLoop[texIndex];
+                int texW, texH;
+                SDL_QueryTexture(currentSnowTex, NULL, NULL, &texW, &texH);
+
+                SDL_Rect destRect = {
+                    static_cast<int>(snow.x - texW / 2.0f),
+                    static_cast<int>(snow.y - texH / 2.0f),
+                    texW,
+                    texH
+                };
+                SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255);
+                SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
+                SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
+            }
+
+            // Clean up temporary loop textures
+            SDL_DestroyTexture(snowTexSmallLoop);
+            SDL_DestroyTexture(snowTexMediumLoop);
+            SDL_DestroyTexture(snowTexLargeLoop);
+
+            SDL_SetRenderTarget(renderer, nullptr); // Reset render target
+
+            // Replace the original frame 0
+            if (!preRenderedFrames.empty() && preRenderedFrames[0]) {
+                SDL_DestroyTexture(preRenderedFrames[0]);
+                preRenderedFrames[0] = loopFrameTexture;
+                std::cout << "Frame 0 replaced for seamless loop." << std::endl;
+            } else {
+                 std::cerr << "Error: Could not replace frame 0 for looping." << std::endl;
+                 SDL_DestroyTexture(loopFrameTexture); // Clean up unused loop frame
+            }
+        }
+    }
+    // --- End Seamless Loop Creation ---
+
     // 5. Cleanup temporary resources (base snowflake textures)
     SDL_DestroyTexture(snowTexSmall);
     SDL_DestroyTexture(snowTexMedium);
