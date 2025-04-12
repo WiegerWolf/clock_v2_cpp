@@ -4,18 +4,20 @@
 
 #include <SDL.h>
 #include <vector>
-#include "display.h"
+// #include "display.h" // No longer needed for update
 
+// Keep Snowflake struct only for the pre-rendering phase
 struct Snowflake {
     float x, y, speed, drift;
     float alpha;        // Opacity
     float angle;        // Current rotation angle
     float angleVel;     // Angular velocity
     int radius;
-    bool settled;       // Whether the snowflake has settled on text
-    int settleTime;     // How long it's been settled
-    float depth;        // Z-position: -1.0 (behind) to 1.0 (in front)
+    // bool settled;    // Removed
+    // int settleTime; // Removed
+    float depth;        // Z-position: -1.0 (behind) to 1.0 (in front) - Used for sorting during pre-render
 };
+
 
 class SnowSystem {
 public:
@@ -23,35 +25,27 @@ public:
     ~SnowSystem();
 
     void initialize(SDL_Renderer* renderer);
-    void update(double wind, const Display* display);
+    void update(); // Removed wind and display parameters
     void draw(SDL_Renderer* renderer);
 
 private:
+    // Keep createSnowflake only for pre-rendering phase
     Snowflake createSnowflake(int screenWidth, int screenHeight);
-    void updateVertexBuffers();
-    void initializeVertexBuffers();
+    // Removed vertex buffer methods
 
-    std::vector<Snowflake> snowflakes;
+    // std::vector<Snowflake> snowflakes; // Temporary during initialization only
+    int numFlakes; // Store the requested number
     int screenWidth, screenHeight;
-    SDL_Renderer* renderer;
+    SDL_Renderer* renderer; // Keep renderer pointer
 
-    // Batched rendering data
-    static const int MAX_BATCH_SIZE = 1024;
-    std::vector<SDL_Vertex> vertices;
-    std::vector<int> indices;
-    SDL_Texture* snowTextures[3];  // One texture per size
-    
-    // Vertex buffers for each snowflake size
-    struct BatchGroup {
-        std::vector<SDL_Vertex> vertices;
-        std::vector<int> indices;
-        size_t count;
-    };
-    BatchGroup batchGroups[3];  // One group per size
+    // Pre-rendered frames
+    std::vector<SDL_Texture*> preRenderedFrames;
+    int currentFrameIndex;
+    int totalFrames;
 
-    static const int SETTLE_TIMEOUT = 1000;
-    static constexpr float CLOCK_PLANE_DEPTH = 0.0f;
-    static constexpr float DEPTH_COLLISION_THRESHOLD = 0.1f;
+    // Constants for pre-rendering
+    static const int PRE_RENDER_SECONDS = 10; // Duration of the animation loop
+    static const int PRE_RENDER_FPS = 30;     // FPS for the pre-rendered animation
 };
 
 #endif // SNOW_SYSTEM_H

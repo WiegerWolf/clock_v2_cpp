@@ -28,7 +28,7 @@ private:
     time_t lastAdviceUpdate;
     int adviceUpdateInterval;
     std::string clothingAdvice;
-    double currentWind;  // Add this line to track wind
+    // double currentWind; // Removed - snow is pre-rendered
 
     void handleEvents();
     bool shouldUpdateAdvice();

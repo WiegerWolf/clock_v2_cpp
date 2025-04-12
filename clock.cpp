@@ -153,9 +153,9 @@ void Clock::update() {
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
-    currentWind = 0.2 * sin(static_cast<double>(currentTime));
+    // currentWind = 0.2 * sin(static_cast<double>(currentTime)); // Removed wind calculation
 
-    snow->update(currentWind, display);
+    snow->update(); // Update snow animation frame
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Check if weather data is valid *before* deciding to update advice
