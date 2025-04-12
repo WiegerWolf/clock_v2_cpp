@@ -182,14 +182,17 @@ void Clock::update() {
 void Clock::draw() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    
+     
     backgroundManager->draw(renderer);
+     
+    // Reset renderer draw color to white before drawing snow, just in case
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     
     // Draw snow before text
     snow->draw(renderer);
-     
+      
     // Text capture removed - Draw directly to the main target
-     
+      
     // Draw all text elements
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
