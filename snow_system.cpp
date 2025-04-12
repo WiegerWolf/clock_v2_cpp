@@ -146,8 +146,18 @@ void SnowSystem::initialize(SDL_Renderer* r) {
                                                           screenWidth, screenHeight);
         if (!finalFrameTexture) {
              std::cerr << "Failed to create final frame texture " << frame << ": " << SDL_GetError() << std::endl;
-             // TODO: Add proper cleanup on failure
-             break;
+             // Cleanup already created frames before breaking
+             for (SDL_Texture* createdFrame : preRenderedFrames) {
+                 if (createdFrame) SDL_DestroyTexture(createdFrame);
+             }
+             preRenderedFrames.clear(); // Clear the vector
+             // Also clean up base textures as initialization failed
+             SDL_DestroyTexture(snowTexSmall);
+             SDL_DestroyTexture(snowTexMedium);
+             SDL_DestroyTexture(snowTexLarge);
+             SDL_SetRenderTarget(renderer, nullptr); // Reset render target
+             SDL_SetRenderDrawBlendMode(renderer, previousBlendMode); // Restore blend mode
+             return; // Exit initialize function entirely on failure
         }
         SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND); // Enable alpha blending
  
