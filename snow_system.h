@@ -3,7 +3,7 @@
 #define SNOW_SYSTEM_H
 
 #include <SDL.h>
-#include <vector>
+#include <vector> // Ensure vector is included for std::vector
 // #include "display.h" // No longer needed for update
 
 // Keep Snowflake struct only for the pre-rendering phase
