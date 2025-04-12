@@ -259,14 +259,26 @@ void SnowSystem::update() {
 
 // Draw renders the current pre-rendered frame
 void SnowSystem::draw(SDL_Renderer* renderer) {
-    if (!renderer || preRenderedFrames.empty() || currentFrameIndex >= preRenderedFrames.size()) {
+    if (!renderer) { // Temporarily removed check for preRenderedFrames for debugging
         return;
     }
 
+    // --- DEBUG: Draw a test rectangle instead of the frame ---
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Enable blending
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 128); // Semi-transparent white
+    SDL_Rect testRect = { 50, 50, screenWidth - 100, screenHeight - 100 }; // Draw a noticeable rectangle
+    SDL_RenderFillRect(renderer, &testRect);
+    // --- END DEBUG ---
+
+    /* // Original code temporarily commented out:
+    if (preRenderedFrames.empty() || currentFrameIndex >= preRenderedFrames.size()) {
+        return;
+    }
     SDL_Texture* currentFrame = preRenderedFrames[currentFrameIndex];
     if (currentFrame) {
         // Ensure blend mode is set correctly for rendering the transparent frame
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Already set above for debug
         SDL_RenderCopy(renderer, currentFrame, nullptr, nullptr);
     }
+    */
 }
