@@ -138,11 +138,16 @@ void SnowSystem::initialize(SDL_Renderer* r) {
     SDL_BlendMode previousBlendMode;
     SDL_GetRenderDrawBlendMode(renderer, &previousBlendMode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Ensure blending is enabled
- 
-    for (int frame = 0; frame < totalFrames; ++frame) {
-        // Create the texture for this specific frame
-        SDL_Texture* finalFrameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                          SDL_TEXTUREACCESS_TARGET,
+
+    // Temporary storage for frames 1 to N-1
+    std::vector<SDL_Texture*> tempFrames;
+    tempFrames.reserve(totalFrames > 0 ? totalFrames - 1 : 0); // Reserve space if totalFrames > 0
+
+    // --- Loop for frames 1 to N-1 ---
+    for (int frame = 1; frame < totalFrames; ++frame) {
+        // Create the texture for this specific frame (frame 'frame')
+        SDL_Texture* frameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                                      SDL_TEXTUREACCESS_TARGET,
                                                           screenWidth, screenHeight);
         if (!finalFrameTexture) {
              std::cerr << "Failed to create final frame texture " << frame << ": " << SDL_GetError() << std::endl;
@@ -159,19 +164,19 @@ void SnowSystem::initialize(SDL_Renderer* r) {
              SDL_SetRenderDrawBlendMode(renderer, previousBlendMode); // Restore blend mode
              return; // Exit initialize function entirely on failure
         }
-        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND); // Enable alpha blending
- 
+        SDL_SetTextureBlendMode(frameTexture, SDL_BLENDMODE_BLEND); // Enable alpha blending
+
         // Set render target to this frame's texture
-        SDL_SetRenderTarget(renderer, finalFrameTexture);
+        SDL_SetRenderTarget(renderer, frameTexture);
         // Clear target with transparency
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Use transparent black
         SDL_RenderClear(renderer);
 
-        // Update snowflake physics (simplified, no settling, fixed wind = 0)
+        // --- Update snowflake physics (advances state from frame-1 to frame) ---
         std::uniform_real_distribution<float> distrib_drift_rand(-0.02f * PRE_RENDER_FPS / 30.0f, 0.02f * PRE_RENDER_FPS / 30.0f);
         double wind = 0.0; // No wind for pre-rendering
 
-        std::vector<Snowflake> nextFrameSnowflakes;
+        std::vector<Snowflake> nextFrameSnowflakes; // Store updated snowflakes here
         nextFrameSnowflakes.reserve(snowflakes.size());
 
         for (auto& snow : snowflakes) {
@@ -220,14 +225,82 @@ void SnowSystem::initialize(SDL_Renderer* r) {
             SDL_SetTextureAlphaMod(currentSnowTex, 255); // Set alpha to fully opaque
             SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
         }
-        // Reset render target (finished drawing snowflakes onto finalFrameTexture)
+
+        // Reset render target (finished drawing snowflakes onto frameTexture)
         SDL_SetRenderTarget(renderer, nullptr);
- 
-        // Store the completed frame texture
-        preRenderedFrames.push_back(finalFrameTexture);
- 
-        // Optional: Print progress
-        if ((frame + 1) % PRE_RENDER_FPS == 0) {
+
+        // Store the completed frame texture (frame 'frame')
+        tempFrames.push_back(frameTexture);
+
+        // Optional: Print progress (adjust frame index for message)
+        if (frame % PRE_RENDER_FPS == 0 && frame > 0) {
+             std::cout << "Pre-rendered " << frame / PRE_RENDER_FPS << " seconds..." << std::endl;
+        }
+    }
+
+    // --- Render Frame 0 using the final state from the loop ---
+    // 'snowflakes' now holds the state needed for frame 0
+
+    SDL_Texture* frame0Texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                                  SDL_TEXTUREACCESS_TARGET,
+                                                  screenWidth, screenHeight);
+    if (!frame0Texture) {
+         std::cerr << "Failed to create frame 0 texture: " << SDL_GetError() << std::endl;
+         // Cleanup tempFrames and base textures
+         for (SDL_Texture* tempFrame : tempFrames) { if (tempFrame) SDL_DestroyTexture(tempFrame); }
+         tempFrames.clear();
+         SDL_DestroyTexture(snowTexSmall);
+         SDL_DestroyTexture(snowTexMedium);
+         SDL_DestroyTexture(snowTexLarge);
+         SDL_SetRenderDrawBlendMode(renderer, previousBlendMode);
+         return;
+    }
+    SDL_SetTextureBlendMode(frame0Texture, SDL_BLENDMODE_BLEND);
+
+    // Set render target to frame 0 texture
+    SDL_SetRenderTarget(renderer, frame0Texture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Transparent black
+    SDL_RenderClear(renderer);
+
+    // Sort the final state for frame 0 drawing
+    std::sort(snowflakes.begin(), snowflakes.end(),
+              [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
+
+    // Draw snowflakes for frame 0 (using the state after frame N-1 update)
+    for (const auto& snow : snowflakes) {
+        int texIndex = snow.radius - 2;
+        if (texIndex < 0 || texIndex > 2) continue;
+
+        SDL_Texture* currentSnowTex = snowTextures[texIndex];
+        int texW, texH;
+        SDL_QueryTexture(currentSnowTex, NULL, NULL, &texW, &texH);
+
+        SDL_Rect destRect = {
+            static_cast<int>(snow.x - texW / 2.0f),
+            static_cast<int>(snow.y - texH / 2.0f),
+            texW,
+            texH
+        };
+        SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255);
+        SDL_SetTextureAlphaMod(currentSnowTex, 255);
+        SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
+    }
+
+    // Reset render target
+    SDL_SetRenderTarget(renderer, nullptr);
+
+    // --- Assemble final preRenderedFrames vector ---
+    preRenderedFrames.clear(); // Ensure it's empty before assembly
+    preRenderedFrames.reserve(totalFrames);
+    if (frame0Texture) { // Add frame 0 first if it was created successfully
+        preRenderedFrames.push_back(frame0Texture);
+    }
+    // Add frames 1 to N-1 from temp storage
+    preRenderedFrames.insert(preRenderedFrames.end(), tempFrames.begin(), tempFrames.end());
+    tempFrames.clear(); // Clear temp vector as textures are now owned by preRenderedFrames
+
+    // Final progress message
+    if (!preRenderedFrames.empty()) {
              std::cout << "Pre-rendered " << (frame + 1) / PRE_RENDER_FPS << " seconds..." << std::endl;
         }
     }
