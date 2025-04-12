@@ -196,6 +196,8 @@ void SnowSystem::initialize(SDL_Renderer* r) {
                  if (createdFrame) SDL_DestroyTexture(createdFrame);
              }
              tempFrames.clear(); // Clear the vector
+             // Also clean up frame0Texture if it exists
+             if (frame0Texture) SDL_DestroyTexture(frame0Texture);
              // Also clean up base textures as initialization failed
              SDL_DestroyTexture(snowTexSmall);
              SDL_DestroyTexture(snowTexMedium);
