@@ -79,7 +79,7 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
     std::uniform_real_distribution<float> distrib_pos_y(-50.0f, static_cast<float>(height) + 50.0f);
     std::uniform_real_distribution<float> distrib_speed(0.5f * PRE_RENDER_FPS / 30.0f, 1.5f * PRE_RENDER_FPS / 30.0f); // Scale speed by FPS
     std::uniform_real_distribution<float> distrib_drift(-0.1f * PRE_RENDER_FPS / 30.0f, 0.1f * PRE_RENDER_FPS / 30.0f);
-    std::uniform_real_distribution<float> distrib_alpha(0.3f, 0.8f);
+    // std::uniform_real_distribution<float> distrib_alpha(0.3f, 0.8f); // Removed
     std::uniform_real_distribution<float> distrib_angle(0.0f, 360.0f);
     std::uniform_real_distribution<float> distrib_angle_vel(-0.5f * PRE_RENDER_FPS / 30.0f, 0.5f * PRE_RENDER_FPS / 30.0f);
     std::uniform_int_distribution<> distrib_radius(2, 4);
@@ -90,7 +90,7 @@ Snowflake SnowSystem::createSnowflake(int width, int height) {
         distrib_pos_y(rng), // Start anywhere, including off-screen
         distrib_speed(rng), // Use scaled speed
         distrib_drift(rng), // Use scaled drift
-        distrib_alpha(rng),
+        // distrib_alpha(rng), // Removed
         distrib_angle(rng),
         distrib_angle_vel(rng), // Use scaled angular velocity
         distrib_radius(rng),
@@ -215,9 +215,9 @@ void SnowSystem::initialize(SDL_Renderer* r) {
                 texW,
                 texH
             };
-            // Apply alpha based on snowflake property - Restore alpha modulation
+            // Apply alpha based on snowflake property - Now always opaque
             SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255); // Ensure snow texture is white
-            SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
+            SDL_SetTextureAlphaMod(currentSnowTex, 255); // Set alpha to fully opaque
             SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
         }
         // Reset render target (finished drawing snowflakes onto finalFrameTexture)

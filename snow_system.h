@@ -9,7 +9,7 @@
 // Keep Snowflake struct only for the pre-rendering phase
 struct Snowflake {
     float x, y, speed, drift;
-    float alpha;        // Opacity
+    // float alpha;     // Opacity - Removed
     float angle;        // Current rotation angle
     float angleVel;     // Angular velocity
     int radius;
