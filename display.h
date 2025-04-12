@@ -13,24 +13,13 @@
 class BackgroundManager;
  
 // Removed original TextKey, TextKeyHash, CachedTexture structs
- 
+  
 class Display {
 public:
-    TTF_Font* font;
-    SDL_Color color;
-    bool isDynamic;  // Whether this is dynamic content (time, etc.)
-
-    bool operator==(const TextKey& other) const {
-        return text == other.text &&
-               font == other.font &&
-               color.r == other.color.r &&
-               color.g == other.color.g &&
-               color.b == other.color.b &&
-               color.a == other.color.a &&
-               isDynamic == other.isDynamic;
+    // Removed misplaced TextKey members and operator==
     Display(SDL_Renderer* renderer, int width, int height);
     ~Display();
-
+ 
     void clear();
     void update();
     void renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY, bool isDynamic = false); // isDynamic is now unused internally
