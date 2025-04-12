@@ -26,7 +26,7 @@ private:
     SDL_Surface* overlay;
     time_t lastUpdate;
     std::string error;
-    std::mutex mutex;
+    mutable std::mutex mutex; // Make mutex mutable
     std::atomic<bool> isLoading{false};
     SDL_Surface* pendingImage;
 };
