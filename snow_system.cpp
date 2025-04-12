@@ -207,12 +207,11 @@ void SnowSystem::initialize(SDL_Renderer* r) {
                 texW,
                 texH
             };
-            // Apply alpha based on snowflake property - Restore alpha modulation
+            // Apply alpha based on snowflake property - Force full opacity for testing
             SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255); // Ensure snow texture is white
-            SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
+            SDL_SetTextureAlphaMod(currentSnowTex, 255); // Force full alpha (ignore snow.alpha)
             SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
         }
- 
         // Reset render target (finished drawing snowflakes onto finalFrameTexture)
         SDL_SetRenderTarget(renderer, nullptr);
  
