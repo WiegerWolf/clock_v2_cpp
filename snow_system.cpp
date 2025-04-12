@@ -299,12 +299,6 @@ void SnowSystem::initialize(SDL_Renderer* r) {
     preRenderedFrames.insert(preRenderedFrames.end(), tempFrames.begin(), tempFrames.end());
     tempFrames.clear(); // Clear temp vector as textures are now owned by preRenderedFrames
 
-    // Final progress message
-    if (!preRenderedFrames.empty()) {
-             std::cout << "Pre-rendered " << (frame + 1) / PRE_RENDER_FPS << " seconds..." << std::endl;
-        }
-    }
-
     // Seamless loop is now handled by fading in the draw function.
     // No need to replace frame 0 here.
 
