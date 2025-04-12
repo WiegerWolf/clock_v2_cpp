@@ -7,6 +7,8 @@
 #include <vector> // Ensure vector is included
 #include <cmath> // For fmod, clamp
 #include <algorithm> // For std::sort, std::clamp
+#include <future> // For std::async, std::future
+#include <thread> // For std::thread::hardware_concurrency
 
 // Helper to create snowflake textures (used during initialization)
 // Moved inside the class in the header, or keep as static helper if preferred
