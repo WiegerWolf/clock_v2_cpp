@@ -240,6 +240,8 @@ void Clock::draw() {
         );
     }
      
+    // Explicitly reset renderer draw color before drawing snow, just in case
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); 
     // Draw snow after text elements, before FPS counter
     snow->draw(renderer);
 
