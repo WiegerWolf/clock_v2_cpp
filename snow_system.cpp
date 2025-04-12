@@ -275,6 +275,9 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
     if (currentFrame) {
         // Ensure blend mode is set correctly for rendering the transparent frame
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Set blend mode for drawing the final frame
+        // Explicitly reset color and alpha modulation for the snow texture
+        SDL_SetTextureColorMod(currentFrame, 255, 255, 255);
+        SDL_SetTextureAlphaMod(currentFrame, 255);
         SDL_RenderCopy(renderer, currentFrame, nullptr, nullptr);
     }
 }
