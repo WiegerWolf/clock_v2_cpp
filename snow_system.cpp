@@ -148,14 +148,14 @@ void SnowSystem::initialize(SDL_Renderer* r) {
         // Create the texture for this specific frame (frame 'frame')
         SDL_Texture* frameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                                       SDL_TEXTUREACCESS_TARGET,
-                                                          screenWidth, screenHeight);
-        if (!finalFrameTexture) {
-             std::cerr << "Failed to create final frame texture " << frame << ": " << SDL_GetError() << std::endl;
-             // Cleanup already created frames before breaking
-             for (SDL_Texture* createdFrame : preRenderedFrames) {
+                                                      screenWidth, screenHeight);
+        if (!frameTexture) {
+             std::cerr << "Failed to create frame texture " << frame << ": " << SDL_GetError() << std::endl;
+             // Cleanup already created frames in tempFrames before breaking
+             for (SDL_Texture* createdFrame : tempFrames) {
                  if (createdFrame) SDL_DestroyTexture(createdFrame);
              }
-             preRenderedFrames.clear(); // Clear the vector
+             tempFrames.clear(); // Clear the vector
              // Also clean up base textures as initialization failed
              SDL_DestroyTexture(snowTexSmall);
              SDL_DestroyTexture(snowTexMedium);
