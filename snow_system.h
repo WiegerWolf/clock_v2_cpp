@@ -3,21 +3,16 @@
 #define SNOW_SYSTEM_H
 
 #include <SDL.h>
-#include <vector> // Ensure vector is included for std::vector
-// #include "display.h" // No longer needed for update
+#include <vector>
+#include <random> // Include for random number generation in createSnowflake
 
-// Keep Snowflake struct only for the pre-rendering phase
 struct Snowflake {
     float x, y, speed, drift;
-    // float alpha;     // Opacity - Removed
     float angle;        // Current rotation angle
     float angleVel;     // Angular velocity
     int radius;
-    // bool settled;    // Removed
-    // int settleTime; // Removed
-    float depth;        // Z-position: -1.0 (behind) to 1.0 (in front) - Used for sorting during pre-render
+    float depth;        // Z-position: -1.0 (behind) to 1.0 (in front) - Used for sorting
 };
-
 
 class SnowSystem {
 public:
@@ -25,28 +20,25 @@ public:
     ~SnowSystem();
 
     void initialize(SDL_Renderer* renderer);
-    void update(); // Removed wind and display parameters
+    void update(); // No wind parameter for now
     void draw(SDL_Renderer* renderer);
 
 private:
-    // Keep createSnowflake only for pre-rendering phase
     Snowflake createSnowflake(int screenWidth, int screenHeight);
-    // Removed vertex buffer methods
+    SDL_Texture* createCircleTexture(SDL_Renderer* renderer, int radius, Uint8 alpha); // Helper
 
-    // std::vector<Snowflake> snowflakes; // Temporary during initialization only
-    int numFlakes; // Store the requested number
+    std::vector<Snowflake> snowflakes;
+    int numFlakes;
     int screenWidth, screenHeight;
     SDL_Renderer* renderer; // Keep renderer pointer
 
-    // Pre-rendered frames
-    std::vector<SDL_Texture*> preRenderedFrames;
-    int currentFrameIndex;
-    int totalFrames;
+    // Base textures for different snowflake sizes
+    SDL_Texture* snowTexSmall;
+    SDL_Texture* snowTexMedium;
+    SDL_Texture* snowTexLarge;
 
-    // Constants for pre-rendering
-    static const int PRE_RENDER_SECONDS = 30; // Duration of the animation loop
-    static const int PRE_RENDER_FPS = 30;     // FPS for the pre-rendered animation
-    static const int FADE_FRAMES = PRE_RENDER_FPS * 5; // 5 second fade duration
+    // Random number generator
+    std::mt19937 rng;
 };
 
 #endif // SNOW_SYSTEM_H

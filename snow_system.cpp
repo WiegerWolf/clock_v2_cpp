@@ -5,13 +5,16 @@
 #include <algorithm>
 #include <iostream>
 #include <vector> // Ensure vector is included
-#include <cmath> // For cosf and M_PI
+#include <cmath> // For fmod, clamp
+#include <algorithm> // For std::sort, std::clamp
 
+// Helper to create snowflake textures (used during initialization)
+// Moved inside the class in the header, or keep as static helper if preferred
+// For simplicity, let's make it a private member function or keep it static here.
+// Keeping it static here for minimal changes to the call sites.
 namespace {
-    std::mt19937 rng{std::random_device{}()};
-
-    // Helper to create snowflake textures (used during pre-rendering)
-    SDL_Texture* createCircleTexture(SDL_Renderer* renderer, int radius, Uint8 alpha = 255) {
+    // Static helper remains valid
+    static SDL_Texture* createCircleTexture(SDL_Renderer* renderer, int radius, Uint8 alpha = 255) {
         const int diameter = radius * 2 + 2; // Add padding for smoother edges
         SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(
             0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA32
@@ -56,51 +59,50 @@ namespace {
         }
 
         return texture;
-    }
 } // end anonymous namespace
 
 SnowSystem::SnowSystem(int flakes, int width, int height)
     : numFlakes(flakes), screenWidth(width), screenHeight(height), renderer(nullptr),
-      currentFrameIndex(0), totalFrames(PRE_RENDER_SECONDS * PRE_RENDER_FPS) {
-    preRenderedFrames.reserve(totalFrames);
+      snowTexSmall(nullptr), snowTexMedium(nullptr), snowTexLarge(nullptr),
+      rng(std::random_device{}()) // Initialize RNG
+{
+    snowflakes.reserve(numFlakes);
 }
 
 SnowSystem::~SnowSystem() {
-    for (SDL_Texture* frame : preRenderedFrames) {
-        if (frame) {
-            SDL_DestroyTexture(frame);
-        }
-    }
-    preRenderedFrames.clear();
-    // Keep createSnowflake logic for the pre-rendering phase
+    // Clean up base textures
+    if (snowTexSmall) SDL_DestroyTexture(snowTexSmall);
+    if (snowTexMedium) SDL_DestroyTexture(snowTexMedium);
+    if (snowTexLarge) SDL_DestroyTexture(snowTexLarge);
+    snowflakes.clear();
 }
 
+// Create individual snowflake data
 Snowflake SnowSystem::createSnowflake(int width, int height) {
-    std::uniform_real_distribution<float> distrib_pos_x(-50.0f, static_cast<float>(width) + 50.0f); // Allow starting off-screen
+    // Use member rng now
+    std::uniform_real_distribution<float> distrib_pos_x(-50.0f, static_cast<float>(width) + 50.0f);
     std::uniform_real_distribution<float> distrib_pos_y(-50.0f, static_cast<float>(height) + 50.0f);
-    std::uniform_real_distribution<float> distrib_speed(0.5f * PRE_RENDER_FPS / 30.0f, 1.5f * PRE_RENDER_FPS / 30.0f); // Scale speed by FPS
-    std::uniform_real_distribution<float> distrib_drift(-0.1f * PRE_RENDER_FPS / 30.0f, 0.1f * PRE_RENDER_FPS / 30.0f);
-    // std::uniform_real_distribution<float> distrib_alpha(0.3f, 0.8f); // Removed
+    // Speed and drift no longer need scaling by PRE_RENDER_FPS
+    std::uniform_real_distribution<float> distrib_speed(0.5f, 1.5f); // Adjust speed range as needed
+    std::uniform_real_distribution<float> distrib_drift(-0.1f, 0.1f); // Adjust drift range as needed
     std::uniform_real_distribution<float> distrib_angle(0.0f, 360.0f);
-    std::uniform_real_distribution<float> distrib_angle_vel(-0.5f * PRE_RENDER_FPS / 30.0f, 0.5f * PRE_RENDER_FPS / 30.0f);
+    std::uniform_real_distribution<float> distrib_angle_vel(-0.5f, 0.5f); // Adjust angular velocity as needed
     std::uniform_int_distribution<> distrib_radius(2, 4);
-    std::uniform_real_distribution<float> distrib_depth(-1.0f, 1.0f); // Keep depth for sorting during pre-render
+    std::uniform_real_distribution<float> distrib_depth(-1.0f, 1.0f);
 
     return {
-        distrib_pos_x(rng),
-        distrib_pos_y(rng), // Start anywhere, including off-screen
-        distrib_speed(rng), // Use scaled speed
-        distrib_drift(rng), // Use scaled drift
-        // distrib_alpha(rng), // Removed
+        distrib_pos_x(rng), // Use member rng
+        distrib_pos_y(rng),
+        distrib_speed(rng),
+        distrib_drift(rng),
         distrib_angle(rng),
-        distrib_angle_vel(rng), // Use scaled angular velocity
+        distrib_angle_vel(rng),
         distrib_radius(rng),
-        // false, // settled removed
-        // 0,     // settleTime removed
         distrib_depth(rng)
     };
 }
 
+// Initialize snowflake particles and base textures
 void SnowSystem::initialize(SDL_Renderer* r) {
     renderer = r;
     if (!renderer) {
@@ -108,265 +110,102 @@ void SnowSystem::initialize(SDL_Renderer* r) {
         return;
     }
 
-    std::cout << "Pre-rendering " << totalFrames << " frames of snow animation..." << std::endl;
+    std::cout << "Initializing snow..." << std::endl;
 
-    // --- Pre-rendering Phase ---
+    // 1. Create base snowflake textures
+    // Use the static helper function defined above
+    snowTexSmall = createCircleTexture(renderer, 2, 200);
+    snowTexMedium = createCircleTexture(renderer, 3, 220);
+    snowTexLarge = createCircleTexture(renderer, 4, 240);
 
-    // 1. Create snowflake textures (different sizes/alphas perhaps)
-    SDL_Texture* snowTexSmall = createCircleTexture(renderer, 2, 200);
-    SDL_Texture* snowTexMedium = createCircleTexture(renderer, 3, 220);
-    SDL_Texture* snowTexLarge = createCircleTexture(renderer, 4, 240);
     if (!snowTexSmall || !snowTexMedium || !snowTexLarge) {
-        std::cerr << "Failed to create base snowflake textures for pre-rendering." << std::endl;
-        // Cleanup any created textures
-        if (snowTexSmall) SDL_DestroyTexture(snowTexSmall);
-        if (snowTexMedium) SDL_DestroyTexture(snowTexMedium);
-        if (snowTexLarge) SDL_DestroyTexture(snowTexLarge);
+        std::cerr << "Failed to create base snowflake textures." << std::endl;
+        // Destructor will clean up any textures that were created successfully
         return;
     }
-    SDL_Texture* snowTextures[] = { snowTexSmall, snowTexMedium, snowTexLarge }; // Index by radius - 2
 
-    // 2. Create initial snowflakes
-    std::vector<Snowflake> snowflakes;
-    snowflakes.reserve(numFlakes);
+    // 2. Create initial snowflake particles
+    snowflakes.clear(); // Ensure vector is empty
     for (int i = 0; i < numFlakes; ++i) {
         snowflakes.push_back(createSnowflake(screenWidth, screenHeight));
     }
- 
-    // 3. Create snowflake textures (done above)
- 
-    // 4. Loop through frames, update physics, render to target, store frame
-    SDL_BlendMode previousBlendMode;
-    SDL_GetRenderDrawBlendMode(renderer, &previousBlendMode);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Ensure blending is enabled
 
-    // --- Render Frame 0 using the INITIAL state ---
-    SDL_Texture* frame0Texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                  SDL_TEXTUREACCESS_TARGET,
-                                                  screenWidth, screenHeight);
-    if (!frame0Texture) {
-         std::cerr << "Failed to create frame 0 texture: " << SDL_GetError() << std::endl;
-         // Cleanup base textures
-         SDL_DestroyTexture(snowTexSmall);
-         SDL_DestroyTexture(snowTexMedium);
-         SDL_DestroyTexture(snowTexLarge);
-         SDL_SetRenderDrawBlendMode(renderer, previousBlendMode);
-         return;
+    std::cout << "Snow initialization complete." << std::endl;
+}
+
+// Update snowflake physics
+void SnowSystem::update() {
+    // Use member rng
+    std::uniform_real_distribution<float> distrib_drift_rand(-0.02f, 0.02f); // Random drift change
+    // double wind = 0.0; // Add wind factor here if needed
+
+    std::vector<Snowflake> nextFrameSnowflakes;
+    nextFrameSnowflakes.reserve(snowflakes.size());
+
+    for (auto& snow : snowflakes) {
+        snow.y += snow.speed;
+
+        float drift_change = distrib_drift_rand(rng); // Use member rng
+        snow.drift = std::clamp(snow.drift + drift_change, -0.5f, 0.5f); // Clamp drift range
+        snow.x += snow.drift; // + wind * (snow.radius / 3.0f); // Add wind effect if needed
+
+        // Wrap around screen edges (allow going further off-screen before reset)
+        if (snow.x < -snow.radius * 2 - 50) snow.x = screenWidth + snow.radius * 2 + 50;
+        else if (snow.x > screenWidth + snow.radius * 2 + 50) snow.x = -snow.radius * 2 - 50;
+
+        // Reset snowflake if it goes too far below screen
+        if (snow.y > screenHeight + snow.radius * 2 + 50) {
+            nextFrameSnowflakes.push_back(createSnowflake(screenWidth, screenHeight));
+            nextFrameSnowflakes.back().y = -snow.radius * 2.0f - 50.0f; // Start above screen
+        } else {
+            snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);
+            if (snow.angle < 0) snow.angle += 360.0f; // Ensure angle stays positive
+            nextFrameSnowflakes.push_back(snow);
+        }
     }
-    SDL_SetTextureBlendMode(frame0Texture, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderTarget(renderer, frame0Texture);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Transparent black
-    SDL_RenderClear(renderer);
+    snowflakes.swap(nextFrameSnowflakes); // Update snowflake list
+}
 
-    // Sort the initial state for frame 0 drawing
+// Draw snowflakes directly using base textures
+void SnowSystem::draw(SDL_Renderer* renderer) {
+    if (!renderer || snowflakes.empty() || !snowTexSmall || !snowTexMedium || !snowTexLarge) {
+        return; // Need renderer, snowflakes, and textures
+    }
+
+    // Sort by depth for pseudo-3D effect
     std::sort(snowflakes.begin(), snowflakes.end(),
               [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
 
-    // Draw snowflakes for frame 0 (using the initial state)
+    // Ensure blend mode is set correctly
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    SDL_Texture* snowTextures[] = { snowTexSmall, snowTexMedium, snowTexLarge };
+
     for (const auto& snow : snowflakes) {
         int texIndex = snow.radius - 2;
-        if (texIndex < 0 || texIndex > 2) continue;
+        if (texIndex < 0 || texIndex > 2) continue; // Safety check
+
         SDL_Texture* currentSnowTex = snowTextures[texIndex];
         int texW, texH;
         SDL_QueryTexture(currentSnowTex, NULL, NULL, &texW, &texH);
-        SDL_Rect destRect = { static_cast<int>(snow.x - texW / 2.0f), static_cast<int>(snow.y - texH / 2.0f), texW, texH };
+
+        SDL_Rect destRect = {
+            static_cast<int>(snow.x - texW / 2.0f),
+            static_cast<int>(snow.y - texH / 2.0f),
+            texW,
+            texH
+        };
+
+        // Optional: Adjust alpha based on depth or other factors if desired
+        // float alphaFactor = (snow.depth + 1.0f) / 2.0f; // Example: fade based on depth
+        // Uint8 alpha = static_cast<Uint8>(alphaFactor * 255);
+        // SDL_SetTextureAlphaMod(currentSnowTex, alpha);
+
+        // Reset color mod (base textures are already white)
         SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255);
-        SDL_SetTextureAlphaMod(currentSnowTex, 255);
+        // Use the alpha baked into the base texture (or set explicitly if needed)
+        // SDL_SetTextureAlphaMod(currentSnowTex, 255); // Assuming base textures have alpha
+
         SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
-    }
-    SDL_SetRenderTarget(renderer, nullptr); // Reset render target
-
-
-    // --- Loop for frames 1 to N-1 ---
-    // Temporary storage for frames 1 to N-1
-    std::vector<SDL_Texture*> tempFrames;
-    tempFrames.reserve(totalFrames > 0 ? totalFrames - 1 : 0);
-
-    for (int frame = 1; frame < totalFrames; ++frame) {
-        // --- Update snowflake physics (advances state from frame-1 to frame) ---
-        // (Physics update logic moved inside the loop below)
-
-        // --- Render frame 'frame' using the UPDATED state ---
-        SDL_Texture* frameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                      SDL_TEXTUREACCESS_TARGET,
-                                                      screenWidth, screenHeight);
-        if (!frameTexture) {
-             std::cerr << "Failed to create frame texture " << frame << ": " << SDL_GetError() << std::endl;
-             // Cleanup already created frames in tempFrames before breaking
-             for (SDL_Texture* createdFrame : tempFrames) {
-                 if (createdFrame) SDL_DestroyTexture(createdFrame);
-             }
-             tempFrames.clear(); // Clear the vector
-             // Also clean up frame0Texture if it exists
-             if (frame0Texture) SDL_DestroyTexture(frame0Texture);
-             // Also clean up base textures as initialization failed
-             SDL_DestroyTexture(snowTexSmall);
-             SDL_DestroyTexture(snowTexMedium);
-             SDL_DestroyTexture(snowTexLarge);
-             SDL_SetRenderTarget(renderer, nullptr); // Reset render target
-             SDL_SetRenderDrawBlendMode(renderer, previousBlendMode); // Restore blend mode
-             return; // Exit initialize function entirely on failure
-        }
-        SDL_SetTextureBlendMode(frameTexture, SDL_BLENDMODE_BLEND); // Enable alpha blending
-
-        // Set render target to this frame's texture
-        SDL_SetRenderTarget(renderer, frameTexture);
-        // Clear target with transparency
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Transparent black
-        SDL_RenderClear(renderer);
-
-        // --- Update snowflake physics (advances state from frame-1 to frame) ---
-        std::uniform_real_distribution<float> distrib_drift_rand(-0.02f * PRE_RENDER_FPS / 30.0f, 0.02f * PRE_RENDER_FPS / 30.0f);
-        double wind = 0.0; // No wind for pre-rendering
-        std::vector<Snowflake> nextFrameSnowflakes;
-        nextFrameSnowflakes.reserve(snowflakes.size());
-
-        for (auto& snow : snowflakes) {
-             snow.y += snow.speed; // Use pre-scaled speed
-
-             float drift_change = distrib_drift_rand(rng);
-             snow.drift = std::clamp(snow.drift + drift_change, -0.5f, 0.5f); // Clamp drift
-             snow.x += snow.drift + (static_cast<float>(wind) * (snow.radius / 3.0f)); // Wind is 0
-
-             // Wrap around screen edges (allow going further off-screen before reset)
-             if (snow.x < -snow.radius * 2 - 50) snow.x = screenWidth + snow.radius * 2 + 50;
-             else if (snow.x > screenWidth + snow.radius * 2 + 50) snow.x = -snow.radius * 2 - 50;
-
-             // Reset snowflake if it goes too far below screen
-             if (snow.y > screenHeight + snow.radius * 2 + 50) {
-                 nextFrameSnowflakes.push_back(createSnowflake(screenWidth, screenHeight));
-                 nextFrameSnowflakes.back().y = -snow.radius * 2.0f - 50.0f; // Start above screen
-             } else {
-                 snow.angle = std::fmod(snow.angle + snow.angleVel, 360.0f);
-                 nextFrameSnowflakes.push_back(snow);
-             }
-        }
-        snowflakes.swap(nextFrameSnowflakes); // Update snowflake list for next iteration
-
-        // Sort the updated state for drawing frame 'frame'
-        std::sort(snowflakes.begin(), snowflakes.end(),
-                  [](const Snowflake& a, const Snowflake& b) { return a.depth < b.depth; });
-
-        // Draw snowflakes to the target texture for frame 'frame'
-        for (const auto& snow : snowflakes) {
-            int texIndex = snow.radius - 2;
-            if (texIndex < 0 || texIndex > 2) continue; // Safety check
-
-            SDL_Texture* currentSnowTex = snowTextures[texIndex];
-            int texW, texH;
-            SDL_QueryTexture(currentSnowTex, NULL, NULL, &texW, &texH);
-
-            SDL_Rect destRect = {
-                static_cast<int>(snow.x - texW / 2.0f),
-                static_cast<int>(snow.y - texH / 2.0f),
-                texW,
-                texH
-            };
-            // Apply alpha based on snowflake property - Now always opaque
-            SDL_SetTextureColorMod(currentSnowTex, 255, 255, 255); // Ensure snow texture is white
-            SDL_SetTextureAlphaMod(currentSnowTex, 255); // Set alpha to fully opaque
-            SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
-        }
-
-        // Reset render target (finished drawing snowflakes onto frameTexture)
-        SDL_SetRenderTarget(renderer, nullptr);
-
-        // Store the completed frame texture (frame 'frame')
-        tempFrames.push_back(frameTexture);
-
-        // Optional: Print progress (adjust frame index for message)
-        if (frame % PRE_RENDER_FPS == 0 && frame > 0) {
-             std::cout << "Pre-rendered " << frame / PRE_RENDER_FPS << " seconds..." << std::endl;
-        }
-    }
-
-    // --- Assemble final preRenderedFrames vector ---
-    preRenderedFrames.clear(); // Ensure it's empty before assembly
-    preRenderedFrames.reserve(totalFrames);
-    if (frame0Texture) { // Add frame 0 first if it was created successfully
-        preRenderedFrames.push_back(frame0Texture);
-    }
-    // Add frames 1 to N-1 from temp storage
-    preRenderedFrames.insert(preRenderedFrames.end(), tempFrames.begin(), tempFrames.end());
-    tempFrames.clear(); // Clear temp vector as textures are now owned by preRenderedFrames
-
-    // 5. Cleanup temporary resources (base snowflake textures)
-    SDL_DestroyTexture(snowTexSmall);
-    SDL_DestroyTexture(snowTexMedium);
-    SDL_DestroyTexture(snowTexLarge);
-    snowflakes.clear(); // No longer needed
-
-    SDL_SetRenderDrawBlendMode(renderer, previousBlendMode); // Restore blend mode
-
-    std::cout << "Snow pre-rendering complete." << std::endl;
-}
-
-
-// Update simply advances the frame index
-void SnowSystem::update() {
-    if (totalFrames > 0) {
-        currentFrameIndex = (currentFrameIndex + 1) % totalFrames;
-    }
-}
-
-// Draw renders the current pre-rendered frame
-void SnowSystem::draw(SDL_Renderer* renderer) {
-    if (!renderer || preRenderedFrames.empty() || currentFrameIndex >= preRenderedFrames.size()) {
-        return;
-    }
-
-    // --- DEBUG code removed ---
-
-    SDL_Texture* currentFrameTexture = preRenderedFrames[currentFrameIndex];
-    if (!currentFrameTexture) return;
-
-    // Ensure blend mode is set correctly for rendering the transparent frame(s)
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    // Calculate the start and end indices for fading periods
-    int fadeStartIndex = totalFrames - FADE_FRAMES;
-    // int fadeInEndIndex = FADE_FRAMES; // Removed - No initial fade-in needed
-
-    // Removed initial fade-in block
-
-    if (FADE_FRAMES > 0 && currentFrameIndex >= fadeStartIndex) {
-        // --- Crossfade Period (End of Loop) ---
-        // Calculate blend factor using cosine easing for a smoother transition
-        float progress = static_cast<float>(currentFrameIndex - fadeStartIndex) / FADE_FRAMES;
-        progress = std::clamp(progress, 0.0f, 1.0f); // Ensure progress stays within [0, 1]
-        // Cosine easing (in-out): starts slow, accelerates, ends slow
-        float alphaBlend = 0.5f * (1.0f - cosf(progress * M_PI));
-
-        // Get the corresponding frame from the beginning of the loop
-        int loopFrameIndex = currentFrameIndex - fadeStartIndex;
-        // Ensure loopFrameIndex is valid
-        if (loopFrameIndex < 0 || loopFrameIndex >= preRenderedFrames.size()) {
-             loopFrameIndex = 0; // Fallback, though shouldn't be needed
-        }
-        SDL_Texture* loopFrameTexture = preRenderedFrames[loopFrameIndex];
-
-        if (loopFrameTexture) {
-            // 1. Draw the current frame (fading out)
-            SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
-            SDL_SetTextureAlphaMod(currentFrameTexture, static_cast<Uint8>((1.0f - alphaBlend) * 255.0f));
-            SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
-
-            // 2. Draw the corresponding loop frame (fading in) on top
-            SDL_SetTextureColorMod(loopFrameTexture, 255, 255, 255);
-            SDL_SetTextureAlphaMod(loopFrameTexture, static_cast<Uint8>(alphaBlend * 255.0f));
-            SDL_RenderCopy(renderer, loopFrameTexture, nullptr, nullptr);
-        } else {
-            // Fallback if loop frame is missing: just draw current frame fully opaque
-            SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
-            SDL_SetTextureAlphaMod(currentFrameTexture, 255);
-            SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
-        }
-
-    } else {
-        // --- Normal Period (No Fading) ---
-        // Explicitly reset color and alpha modulation for the pre-rendered frame texture
-        SDL_SetTextureColorMod(currentFrameTexture, 255, 255, 255);
-        SDL_SetTextureAlphaMod(currentFrameTexture, 255);
-        SDL_RenderCopy(renderer, currentFrameTexture, nullptr, nullptr);
     }
 }

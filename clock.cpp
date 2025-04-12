@@ -17,7 +17,7 @@
 #include <iomanip>
 #include <sstream>
 
-Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice("") {} // Removed currentWind(0.0)
+Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice("") {}
 
 Clock::~Clock() {
     running = false;  // Stop the main loop first
@@ -154,9 +154,8 @@ void Clock::update() {
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
-    // currentWind = 0.2 * sin(static_cast<double>(currentTime)); // Removed wind calculation
 
-    snow->update(); // Update snow animation frame
+    snow->update(); // Update snow physics
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Check if weather data is valid *before* deciding to update advice
