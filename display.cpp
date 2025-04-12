@@ -354,6 +354,7 @@ void Display::renderFpsCounter() {
 void Display::update() {
     updateFpsCounter();
     renderFpsCounter();
+    cleanupCache(); // Clean up old textures from the cache
     // SDL_Renderer is updated in the main loop after drawing everything
 }
 
