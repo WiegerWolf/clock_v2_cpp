@@ -59,7 +59,8 @@ namespace {
         }
 
         return texture;
-} // end anonymous namespace
+    } // End of createCircleTexture function
+} // End of anonymous namespace
 
 SnowSystem::SnowSystem(int flakes, int width, int height)
     : numFlakes(flakes), screenWidth(width), screenHeight(height), renderer(nullptr),
