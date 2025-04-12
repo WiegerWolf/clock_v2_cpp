@@ -224,10 +224,22 @@ void SnowSystem::initialize(SDL_Renderer* r) {
              // TODO: Add proper cleanup on failure
              break;
         }
-        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND);
+        // Set blend mode to NONE for direct pixel copy when creating the final frame texture
+        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_NONE); // Target texture should not blend during copy
         SDL_SetRenderTarget(renderer, finalFrameTexture); // Set target to the new texture
+
+        // Ensure renderer blend mode is also NONE for the copy operation itself
+        SDL_BlendMode previousRenderBlendMode;
+        SDL_GetRenderDrawBlendMode(renderer, &previousRenderBlendMode); // Store current blend mode
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE); // Set to NONE for copy
+
         SDL_RenderCopy(renderer, frameTarget, nullptr, nullptr); // Copy from the intermediate target
+
+        SDL_SetRenderDrawBlendMode(renderer, previousRenderBlendMode); // Restore previous renderer blend mode
         SDL_SetRenderTarget(renderer, nullptr); // Reset target
+
+        // Now set the final texture's blend mode to BLEND for later drawing onto the screen
+        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND);
 
         preRenderedFrames.push_back(finalFrameTexture);
 
@@ -259,26 +271,17 @@ void SnowSystem::update() {
 
 // Draw renders the current pre-rendered frame
 void SnowSystem::draw(SDL_Renderer* renderer) {
-    if (!renderer) { // Temporarily removed check for preRenderedFrames for debugging
+    if (!renderer || preRenderedFrames.empty() || currentFrameIndex >= preRenderedFrames.size()) {
         return;
     }
 
-    // --- DEBUG: Draw a test rectangle instead of the frame ---
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Enable blending
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 128); // Semi-transparent white
-    SDL_Rect testRect = { 50, 50, screenWidth - 100, screenHeight - 100 }; // Draw a noticeable rectangle
-    SDL_RenderFillRect(renderer, &testRect);
-    // --- END DEBUG ---
+    // --- DEBUG code removed ---
 
-    /* // Original code temporarily commented out:
-    if (preRenderedFrames.empty() || currentFrameIndex >= preRenderedFrames.size()) {
-        return;
-    }
+    // Original code restored:
     SDL_Texture* currentFrame = preRenderedFrames[currentFrameIndex];
     if (currentFrame) {
         // Ensure blend mode is set correctly for rendering the transparent frame
-        // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Already set above for debug
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Set blend mode for drawing the final frame
         SDL_RenderCopy(renderer, currentFrame, nullptr, nullptr);
     }
-    */
 }
