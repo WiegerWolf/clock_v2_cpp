@@ -20,7 +20,7 @@ const SDL_Color SHADOW_COLOR = {0, 0, 0, 30}; // Much lower alpha for soft shado
 // const int SHADOW_OFFSET_X = 2; // Removed
 // const int SHADOW_OFFSET_Y = 2; // Removed
 const int SHADOW_RADIUS = 3;       // Radius for the soft shadow spread (adjust as needed)
-const int SHADOW_SAMPLES = 8;      // Number of layers for the soft shadow (adjust for quality/performance)
+const int SHADOW_SAMPLES = 4;      // Reduced layers for soft shadow (adjust for quality/performance)
 
 // Snow configuration
 const int NUM_SNOWFLAKES = 1000;  // Increased number of snowflakes
