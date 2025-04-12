@@ -29,6 +29,7 @@ private:
     mutable std::mutex mutex; // Make mutex mutable
     std::atomic<bool> isLoading{false};
     SDL_Surface* pendingImage;
+    std::thread backgroundThread; // Thread for background loading
 };
 
 #endif // BACKGROUND_MANAGER_H

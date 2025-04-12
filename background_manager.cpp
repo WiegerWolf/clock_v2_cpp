@@ -23,6 +23,11 @@ std::string BackgroundManager::getError() const {
 }
 
 BackgroundManager::~BackgroundManager() {
+    // Ensure the background thread finishes before destruction
+    if (backgroundThread.joinable()) {
+        backgroundThread.join();
+    }
+
     if (currentImage) {
         SDL_FreeSurface(currentImage);
     }
@@ -154,17 +159,22 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
 }
 
 void BackgroundManager::loadImageAsync(const std::string& url, int width, int height) {
-    if (isLoading) return;
-    
-    isLoading = true;
-    std::thread([this, url, width, height]() {
+    if (isLoading.load()) return; // Use load() for atomic read
+
+    // Join the previous thread if it's still running
+    if (backgroundThread.joinable()) {
+        backgroundThread.join();
+    }
+
+    isLoading.store(true); // Use store() for atomic write
+    backgroundThread = std::thread([this, url, width, height]() { // Assign to member thread
         SDL_Surface* newImage = loadImage(url, width, height);
         if (newImage) {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard<std::mutex> lock(mutex); // Mutex still needed for pendingImage
             pendingImage = newImage;
         }
-        isLoading = false;
-    }).detach();
+        isLoading.store(false); // Use store() for atomic write
+    }); // Don't detach
 }
 
 void BackgroundManager::update(int width, int height) {
