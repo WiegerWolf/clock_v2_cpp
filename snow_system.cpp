@@ -203,11 +203,10 @@ void SnowSystem::initialize(SDL_Renderer* r) {
                 texW,
                 texH
             };
-            // Apply alpha based on snowflake property
-            SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
+            // Apply alpha based on snowflake property - REMOVED for debugging opaque circles
+            // SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
             SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
         }
-
         // Reset render target
         SDL_SetRenderTarget(renderer, nullptr);
 
