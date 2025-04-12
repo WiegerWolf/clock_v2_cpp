@@ -217,32 +217,25 @@ void SnowSystem::initialize(SDL_Renderer* r) {
         // Create a final texture from the target content and store it
         // We need to copy the content, not just the pointer to the target texture
         SDL_Texture* finalFrameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                          SDL_TEXTUREACCESS_STATIC, // Static is fine now
+                                                          SDL_TEXTUREACCESS_TARGET, // Create as target initially
                                                           screenWidth, screenHeight);
         if (!finalFrameTexture) {
              std::cerr << "Failed to create final frame texture " << frame << ": " << SDL_GetError() << std::endl;
              // TODO: Add proper cleanup on failure
              break;
         }
-        // Set blend mode to NONE for direct pixel copy when creating the final frame texture
-        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_NONE); // Target texture should not blend during copy
-        SDL_SetRenderTarget(renderer, finalFrameTexture); // Set target to the new texture
-
-        // Ensure renderer blend mode is also NONE for the copy operation itself
-        SDL_BlendMode previousRenderBlendMode;
-        SDL_GetRenderDrawBlendMode(renderer, &previousRenderBlendMode); // Store current blend mode
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE); // Set to NONE for copy
-
-        SDL_RenderCopy(renderer, frameTarget, nullptr, nullptr); // Copy from the intermediate target
-
-        SDL_SetRenderDrawBlendMode(renderer, previousRenderBlendMode); // Restore previous renderer blend mode
-        SDL_SetRenderTarget(renderer, nullptr); // Reset target
-
-        // Now set the final texture's blend mode to BLEND for later drawing onto the screen
+        // Set the final texture's blend mode to BLEND *before* rendering onto it
         SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND);
-
+        SDL_SetRenderTarget(renderer, finalFrameTexture); // Set target to the new texture
+ 
+        // Simply copy from the intermediate target. Renderer blend mode shouldn't affect this when target is set.
+        SDL_RenderCopy(renderer, frameTarget, nullptr, nullptr); // Copy from the intermediate target
+ 
+        // Reset target. Blend mode is already set to BLEND above, ready for drawing later.
+        SDL_SetRenderTarget(renderer, nullptr);
+ 
         preRenderedFrames.push_back(finalFrameTexture);
-
+ 
         // Optional: Print progress
         if ((frame + 1) % PRE_RENDER_FPS == 0) {
              std::cout << "Pre-rendered " << (frame + 1) / PRE_RENDER_FPS << " seconds..." << std::endl;
