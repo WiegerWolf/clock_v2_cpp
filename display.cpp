@@ -200,23 +200,19 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
         };
  
         // Removed rendering shadow to textCapture
-        // Render shadow sample to main screen (get current target)
-        SDL_Renderer* currentTarget = SDL_GetRenderTarget(renderer);
-        SDL_SetRenderTarget(renderer, currentTarget);
+        // Render shadow sample to main screen (uses the currently set target)
         SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
     }
-
+ 
     // Reset color and alpha modulation for main text
     SDL_SetTextureColorMod(texture, 255, 255, 255); // Reset color to white
     SDL_SetTextureAlphaMod(texture, color.a);       // Use original text alpha
  
     // --- Render Main Text ---
     // Removed rendering main text to textCapture
-    // Render main text to screen (get current target)
-    SDL_Renderer* currentTarget = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, currentTarget);
+    // Render main text to screen (uses the currently set target)
     SDL_RenderCopy(renderer, texture, nullptr, &destRect);
- 
+  
     // Increment frame counter
     frameCounter++;
 } // Removed isDynamic parameter usage
