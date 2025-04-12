@@ -14,7 +14,7 @@ public:
     ~BackgroundManager();
     void update(int width, int height);
     void draw(SDL_Renderer* renderer);
-    std::string getError() const { return error; }
+    std::string getError() const; // Make const version lock
 
 private:
     std::string fetchImageUrl();

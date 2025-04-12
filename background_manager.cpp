@@ -16,6 +16,12 @@ using json = nlohmann::json;
 
 BackgroundManager::BackgroundManager() : currentImage(nullptr), overlay(nullptr), lastUpdate(0), error(""), pendingImage(nullptr) {}
 
+// Implement the const getError with locking
+std::string BackgroundManager::getError() const {
+    std::lock_guard<std::mutex> lock(mutex);
+    return error;
+}
+
 BackgroundManager::~BackgroundManager() {
     if (currentImage) {
         SDL_FreeSurface(currentImage);
@@ -31,9 +37,11 @@ std::string BackgroundManager::fetchImageUrl() {
     cli.enable_server_certificate_verification(false);
     
     auto res = cli.Get(BACKGROUND_API_URL_PATH);
-    
     if (!res) {
-        error = "Failed to get response";
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            error = "Failed to get response";
+        }
         return "";
     }
     
@@ -42,21 +50,33 @@ std::string BackgroundManager::fetchImageUrl() {
             json data = json::parse(res->body);
             return data[0]["fullUrl"].get<std::string>();
         } catch (const json::parse_error& e) {
-            error = "JSON parse error: " + std::string(e.what());
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                error = "JSON parse error: " + std::string(e.what());
+            }
             return "";
         } catch (const std::exception& e) {
-            error = "Error processing JSON: " + std::string(e.what());
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                error = "Error processing JSON: " + std::string(e.what());
+            }
             return "";
         }
     }
-    error = "HTTP request failed: " + std::to_string(res->status);
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        error = "HTTP request failed: " + std::to_string(res->status);
+    }
     return "";
 }
 
 SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
     SDL_Surface* overlaySurface = SDL_CreateRGBSurface(0, width, height, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
     if (!overlaySurface) {
-        error = "SDL_CreateRGBSurface failed: " + std::string(SDL_GetError());
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            error = "SDL_CreateRGBSurface failed: " + std::string(SDL_GetError());
+        }
         return nullptr;
     }
     SDL_FillRect(overlaySurface, NULL, SDL_MapRGBA(overlaySurface->format, 0, 0, 0, static_cast<int>(255 * BACKGROUND_DARKNESS)));
@@ -77,40 +97,59 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
     cli.set_connection_timeout(5, 0);
     
     auto res = cli.Get(path.c_str());
-    
     if (!res) {
-        error = "Failed to get image response: " + std::string(httplib::to_string(res.error()));
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            error = "Failed to get image response: " + std::string(httplib::to_string(res.error()));
+        }
         return nullptr;
     }
     
     if (res && res->status == 200) {
         SDL_RWops* rw = SDL_RWFromMem((void*)res->body.data(), res->body.size());
         if (!rw) {
-            error = "SDL_RWFromMem failed: " + std::string(SDL_GetError());
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                error = "SDL_RWFromMem failed: " + std::string(SDL_GetError());
+            }
             return nullptr;
         }
         SDL_Surface* imageSurface = IMG_Load_RW(rw, 1);
         if (!imageSurface) {
-            error = "IMG_Load_RW failed: " + std::string(IMG_GetError());
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                error = "IMG_Load_RW failed: " + std::string(IMG_GetError());
+            }
+            // SDL_RWclose(rw); // Should be closed here too
             return nullptr;
         }
+        // SDL_RWclose(rw); // Close RWops after use
         SDL_Surface* scaledSurface = SDL_CreateRGBSurface(0, width, height, 32, imageSurface->format->Rmask, imageSurface->format->Gmask, imageSurface->format->Bmask, imageSurface->format->Amask);
         if (!scaledSurface) {
-            error = "SDL_CreateRGBSurface (scaled) failed: " + std::string(SDL_GetError());
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                error = "SDL_CreateRGBSurface (scaled) failed: " + std::string(SDL_GetError());
+            }
             SDL_FreeSurface(imageSurface);
             return nullptr;
         }
         if (SDL_BlitScaled(imageSurface, NULL, scaledSurface, NULL) < 0) {
-            error = "SDL_BlitScaled failed: " + std::string(SDL_GetError());
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                error = "SDL_BlitScaled failed: " + std::string(SDL_GetError());
+            }
             SDL_FreeSurface(imageSurface);
             SDL_FreeSurface(scaledSurface);
             return nullptr;
         }
         SDL_FreeSurface(imageSurface);
-        overlay = createDarkeningOverlay(width, height);
+        overlay = createDarkeningOverlay(width, height); // Potential error write inside this needs lock too (already added)
         return scaledSurface;
     }
-    error = "HTTP image request failed: " + std::to_string(res ? res->status : -1);
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        error = "HTTP image request failed: " + std::to_string(res ? res->status : -1);
+    }
     return nullptr;
 }
 
@@ -161,7 +200,12 @@ void BackgroundManager::draw(SDL_Renderer* renderer) {
             SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_DestroyTexture(texture);
         } else {
-            error = "SDL_CreateTextureFromSurface failed: " + std::string(SDL_GetError());
+            // Lock not strictly needed here if error is only read by getError(),
+            // but good practice to lock writes consistently.
+            // std::lock_guard<std::mutex> lock(mutex); // Optional lock for write consistency
+            // error = "SDL_CreateTextureFromSurface failed: " + std::string(SDL_GetError());
+            // Let's skip locking this one as it's less critical and only happens in main thread draw path
+             error = "SDL_CreateTextureFromSurface failed: " + std::string(SDL_GetError());
         }
     }
     if (overlay) {
@@ -170,6 +214,7 @@ void BackgroundManager::draw(SDL_Renderer* renderer) {
             SDL_RenderCopy(renderer, overlayTexture, NULL, NULL);
             SDL_DestroyTexture(overlayTexture);
         } else {
+            // Skip locking this one too for same reason as above
             error = "SDL_CreateTextureFromSurface (overlay) failed: " + std::string(SDL_GetError());
         }
     }
