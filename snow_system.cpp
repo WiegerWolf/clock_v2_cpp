@@ -281,7 +281,6 @@ void SnowSystem::initialize(SDL_Renderer* r) {
                  SDL_DestroyTexture(loopFrameTexture); // Clean up unused loop frame
             }
         }
-    }
     // --- End Seamless Loop Creation ---
 
     // 5. Cleanup temporary resources (base snowflake textures) - Now done AFTER loop creation
