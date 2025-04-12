@@ -187,10 +187,9 @@ void Clock::draw() {
     
     // Draw snow before text
     snow->draw(renderer);
-    
-    // Begin capturing text renders
-    display->beginTextCapture();
-    
+     
+    // Text capture removed - Draw directly to the main target
+     
     // Draw all text elements
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
@@ -243,13 +242,10 @@ void Clock::draw() {
             1.2f
         );
     }
-    
-    // End text capture and switch back to main render target
-    display->endTextCapture();
-    
-    // Reset the texture change flag
-    display->resetTextureChangeFlag();
-    
+     
+    // Text capture removed
+    // No need to reset texture change flag
+     
     // Update and render FPS counter
     display->update();
     

@@ -133,28 +133,28 @@ void SnowSystem::initialize(SDL_Renderer* r) {
     for (int i = 0; i < numFlakes; ++i) {
         snowflakes.push_back(createSnowflake(screenWidth, screenHeight));
     }
-
-    // 3. Create target texture for rendering frames
-    SDL_Texture* frameTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                SDL_TEXTUREACCESS_TARGET,
-                                                screenWidth, screenHeight);
-    if (!frameTarget) {
-        std::cerr << "Failed to create target texture for pre-rendering: " << SDL_GetError() << std::endl;
-        SDL_DestroyTexture(snowTexSmall);
-        SDL_DestroyTexture(snowTexMedium);
-        SDL_DestroyTexture(snowTexLarge);
-        return;
-    }
-    SDL_SetTextureBlendMode(frameTarget, SDL_BLENDMODE_BLEND); // Enable alpha blending on the target
-
+ 
+    // 3. Create snowflake textures (done above)
+ 
     // 4. Loop through frames, update physics, render to target, store frame
     SDL_BlendMode previousBlendMode;
     SDL_GetRenderDrawBlendMode(renderer, &previousBlendMode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Ensure blending is enabled
-
+ 
     for (int frame = 0; frame < totalFrames; ++frame) {
-        // Set render target
-        SDL_SetRenderTarget(renderer, frameTarget);
+        // Create the texture for this specific frame
+        SDL_Texture* finalFrameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                                          SDL_TEXTUREACCESS_TARGET,
+                                                          screenWidth, screenHeight);
+        if (!finalFrameTexture) {
+             std::cerr << "Failed to create final frame texture " << frame << ": " << SDL_GetError() << std::endl;
+             // TODO: Add proper cleanup on failure
+             break;
+        }
+        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND); // Enable alpha blending
+ 
+        // Set render target to this frame's texture
+        SDL_SetRenderTarget(renderer, finalFrameTexture);
         // Clear target with transparency
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
@@ -212,36 +212,11 @@ void SnowSystem::initialize(SDL_Renderer* r) {
             SDL_SetTextureAlphaMod(currentSnowTex, static_cast<Uint8>(snow.alpha * 255));
             SDL_RenderCopyEx(renderer, currentSnowTex, nullptr, &destRect, snow.angle, nullptr, SDL_FLIP_NONE);
         }
-        // Reset render target
-        SDL_SetRenderTarget(renderer, nullptr);
-
-        // Create a final texture from the target content and store it
-        // We need to copy the content, not just the pointer to the target texture
-        SDL_Texture* finalFrameTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                                          SDL_TEXTUREACCESS_TARGET, // Create as target initially
-                                                          screenWidth, screenHeight);
-        if (!finalFrameTexture) {
-             std::cerr << "Failed to create final frame texture " << frame << ": " << SDL_GetError() << std::endl;
-             // TODO: Add proper cleanup on failure
-             break;
-        }
-        // Set the final texture's blend mode to BLEND *before* rendering onto it
-        SDL_SetTextureBlendMode(finalFrameTexture, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderTarget(renderer, finalFrameTexture); // Set target to the new texture
-
-        // Set blend mode to NONE for direct pixel copy from intermediate target
-        SDL_BlendMode oldBlendMode;
-        SDL_GetRenderDrawBlendMode(renderer, &oldBlendMode);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-
-        SDL_RenderCopy(renderer, frameTarget, nullptr, nullptr); // Copy from the intermediate target
-
-        // Restore previous blend mode
-        SDL_SetRenderDrawBlendMode(renderer, oldBlendMode);
-
-        // Reset target. Blend mode for finalFrameTexture is already set to BLEND above.
+ 
+        // Reset render target (finished drawing snowflakes onto finalFrameTexture)
         SDL_SetRenderTarget(renderer, nullptr);
  
+        // Store the completed frame texture
         preRenderedFrames.push_back(finalFrameTexture);
  
         // Optional: Print progress
@@ -249,9 +224,8 @@ void SnowSystem::initialize(SDL_Renderer* r) {
              std::cout << "Pre-rendered " << (frame + 1) / PRE_RENDER_FPS << " seconds..." << std::endl;
         }
     }
-
-    // 5. Cleanup temporary resources
-    SDL_DestroyTexture(frameTarget);
+ 
+    // 5. Cleanup temporary resources (base snowflake textures)
     SDL_DestroyTexture(snowTexSmall);
     SDL_DestroyTexture(snowTexMedium);
     SDL_DestroyTexture(snowTexLarge);
@@ -282,8 +256,8 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
     SDL_Texture* currentFrame = preRenderedFrames[currentFrameIndex];
     if (currentFrame) {
         // Ensure blend mode is set correctly for rendering the transparent frame
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND); // Set blend mode for drawing the final frame
-        // Explicitly reset color and alpha modulation for the snow texture
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        // Explicitly reset color and alpha modulation for the pre-rendered frame texture
         SDL_SetTextureColorMod(currentFrame, 255, 255, 255);
         SDL_SetTextureAlphaMod(currentFrame, 255);
         SDL_RenderCopy(renderer, currentFrame, nullptr, nullptr);

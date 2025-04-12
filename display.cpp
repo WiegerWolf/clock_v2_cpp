@@ -12,11 +12,10 @@
 #include <cmath> // Needed for sin and cos
 
 Display::Display(SDL_Renderer* renderTarget, int width, int height)
-    : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), fontExtraSmall(nullptr),
-    backgroundManager(new BackgroundManager()), textCapture(nullptr), textPixels(nullptr),
-    textureChanged(false), previousTextPixels(nullptr), frameCounter(0), currentCacheMemory(0),
+    : renderer(renderTarget), sizeW(width), sizeH(height), fontLarge(nullptr), fontSmall(nullptr), fontExtraSmall(nullptr), backgroundManager(new BackgroundManager()),
+    frameCounter(0), currentCacheMemory(0), // Removed text capture members
     currentFps(0.0f), showFps(false) {
-    
+ 
     lastFrameTime = std::chrono::high_resolution_clock::now();
     
     screenSurface = SDL_CreateRGBSurface(0, sizeW, sizeH, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
@@ -37,29 +36,20 @@ Display::Display(SDL_Renderer* renderTarget, int width, int height)
     if (!fontExtraSmall) {
         std::cerr << "TTF_OpenFont (extra small) failed: " << TTF_GetError() << std::endl;
     }
-
-    mainTarget = SDL_GetRenderTarget(renderer);
-    textCapture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                  SDL_TEXTUREACCESS_TARGET, width, height);
-    if (!textCapture) {
-        std::cerr << "Failed to create text capture texture: " << SDL_GetError() << std::endl;
-    }
-    texturePitch = width * 4;
-    textPixels = new Uint32[width * height];
-    previousTextPixels = new Uint32[width * height];
-    std::memset(previousTextPixels, 0, width * height * sizeof(Uint32));
+ 
+    // Removed text capture initialization
+    frameCounter = 0; // Initialize frame counter
 }
-
+ 
 Display::~Display() {
     if (fontLarge) TTF_CloseFont(fontLarge);
     if (fontSmall) TTF_CloseFont(fontSmall);
     if (fontExtraSmall) TTF_CloseFont(fontExtraSmall);
     if (screenSurface) SDL_FreeSurface(screenSurface);
     if (backgroundManager) delete backgroundManager;
-    if (textCapture) SDL_DestroyTexture(textCapture);
-    delete[] textPixels;
-    delete[] previousTextPixels;
-
+ 
+    // Removed text capture cleanup
+ 
     // Cleanup texture cache
     for (auto& pair : textureCache) {
         if (pair.second.texture) {
@@ -67,7 +57,17 @@ Display::~Display() {
         }
     }
 }
-
+ 
+// Implement the hash function for SimpleTextKey
+std::size_t Display::SimpleTextKeyHash::operator()(const SimpleTextKey& k) const {
+    std::size_t h1 = std::hash<std::string>{}(k.text);
+    std::size_t h2 = std::hash<void*>{}(k.font);
+    // Combine color components into a single integer for hashing
+    std::size_t h3 = std::hash<int>{}(k.color.r << 24 | k.color.g << 16 | k.color.b << 8 | k.color.a);
+    // Combine hashes using XOR and bit shifts
+    return h1 ^ (h2 << 1) ^ (h3 << 2);
+}
+ 
 size_t Display::estimateTextureMemory(int width, int height) {
     // Assuming RGBA8888 format (4 bytes per pixel)
     return width * height * 4;
@@ -75,14 +75,14 @@ size_t Display::estimateTextureMemory(int width, int height) {
 
 void Display::removeOldestTexture() {
     if (textureCache.empty()) return;
-
+ 
     auto oldest = textureCache.begin();
-    Uint32 oldestTime = oldest->second.lastUsed;
-
+    Uint32 oldestFrame = oldest->second.lastUsedFrame;
+ 
     for (auto it = textureCache.begin(); it != textureCache.end(); ++it) {
-        if (it->second.lastUsed < oldestTime) {
+        if (it->second.lastUsedFrame < oldestFrame) {
             oldest = it;
-            oldestTime = it->second.lastUsed;
+            oldestFrame = it->second.lastUsedFrame;
         }
     }
 
@@ -110,15 +110,15 @@ SDL_Texture* Display::createTextTexture(const std::string& text, TTF_Font* font,
     SDL_FreeSurface(surface);
     return texture;
 }
-
+ 
 SDL_Texture* Display::getCachedTexture(const std::string& text, TTF_Font* font, 
-                                     SDL_Color color, bool isDynamic) {
-    TextKey key{text, font, color, isDynamic};
+                                     SDL_Color color) { // Removed isDynamic parameter
+    SimpleTextKey key{text, font, color};
     auto it = textureCache.find(key);
-    
+ 
     if (it != textureCache.end()) {
-        // Update last used time
-        it->second.lastUsed = frameCounter;
+        // Update last used frame
+        it->second.lastUsedFrame = frameCounter;
         return it->second.texture;
     }
 
@@ -129,31 +129,31 @@ SDL_Texture* Display::getCachedTexture(const std::string& text, TTF_Font* font,
 
     // Calculate memory size
     size_t memSize = estimateTextureMemory(rect.w, rect.h);
-
-    // Manage cache size
-    while ((textureCache.size() >= MAX_CACHE_SIZE || currentCacheMemory + memSize > MAX_CACHE_MEMORY) 
+ 
+    // Manage cache size (only check memory limit now)
+    while ((currentCacheMemory + memSize > MAX_CACHE_MEMORY)
            && !textureCache.empty()) {
         removeOldestTexture();
     }
-
+ 
     // Add to cache
     currentCacheMemory += memSize;
-    textureCache[key] = CachedTexture{
+    textureCache[key] = SimpleCachedTexture{
         texture,
-        frameCounter,
+        frameCounter, // Use frameCounter as lastUsedFrame
         rect,
         memSize
     };
 
     return texture;
 }
-
+ 
 void Display::cleanupCache() {
-    std::vector<TextKey> toRemove;
-    
+    std::vector<SimpleTextKey> toRemove;
+ 
     for (const auto& pair : textureCache) {
-        if (frameCounter - pair.second.lastUsed > CACHE_LIFETIME || 
-            (pair.first.isDynamic && frameCounter - pair.second.lastUsed > 1)) {
+        // Simple LRU based on frame count
+        if (frameCounter - pair.second.lastUsedFrame > CACHE_LIFETIME) {
             toRemove.push_back(pair.first);
         }
     }
@@ -164,15 +164,15 @@ void Display::cleanupCache() {
         textureCache.erase(key);
     }
 }
-
-void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY, bool isDynamic) {
+ 
+void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY, bool isDynamic /*= false*/) { // isDynamic is unused
     // Get cached or create new texture
-    SDL_Texture* texture = getCachedTexture(text, font, color, isDynamic);
+    SDL_Texture* texture = getCachedTexture(text, font, color); // Removed isDynamic
     if (!texture) return;
-
+ 
     // Get the cached rect for size
-    const SDL_Rect& cachedRect = textureCache[TextKey{text, font, color, isDynamic}].rect;
-    
+    const SDL_Rect& cachedRect = textureCache[SimpleTextKey{text, font, color}].rect; // Use SimpleTextKey
+ 
     // Calculate position
     SDL_Rect destRect = {
         centerX - cachedRect.w / 2,
@@ -198,34 +198,28 @@ void Display::renderText(const std::string& text, TTF_Font* font, SDL_Color colo
             destRect.w,
             destRect.h
         };
-
-        // Render shadow sample to text capture if needed
-        if (isDynamic) {
-            SDL_SetRenderTarget(renderer, textCapture);
-            SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
-        }
-        // Render shadow sample to main screen
-        SDL_SetRenderTarget(renderer, mainTarget);
+ 
+        // Removed rendering shadow to textCapture
+        // Render shadow sample to main screen (get current target)
+        SDL_Renderer* currentTarget = SDL_GetRenderTarget(renderer);
+        SDL_SetRenderTarget(renderer, currentTarget);
         SDL_RenderCopy(renderer, texture, nullptr, &shadowDestRect);
     }
 
     // Reset color and alpha modulation for main text
     SDL_SetTextureColorMod(texture, 255, 255, 255); // Reset color to white
     SDL_SetTextureAlphaMod(texture, color.a);       // Use original text alpha
-
+ 
     // --- Render Main Text ---
-    // Render main text to text capture if needed
-    if (isDynamic) {
-        SDL_SetRenderTarget(renderer, textCapture);
-        SDL_RenderCopy(renderer, texture, nullptr, &destRect);
-    }
-    // Render main text to screen
-    SDL_SetRenderTarget(renderer, mainTarget);
+    // Removed rendering main text to textCapture
+    // Render main text to screen (get current target)
+    SDL_Renderer* currentTarget = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, currentTarget);
     SDL_RenderCopy(renderer, texture, nullptr, &destRect);
-
+ 
     // Increment frame counter
     frameCounter++;
-}
+} // Removed isDynamic parameter usage
 
 // Rest of the implementation remains largely unchanged
 void Display::renderMultilineText(const std::string& text, TTF_Font* font, SDL_Color color, 
@@ -355,44 +349,11 @@ void Display::update() {
     updateFpsCounter();
     renderFpsCounter();
     cleanupCache(); // Clean up old textures from the cache
-    // SDL_Renderer is updated in the main loop after drawing everything
+    // SDL_Renderer is updated in the main loop (Clock::draw) after drawing everything
 }
-
-void Display::beginTextCapture() {
-    mainTarget = SDL_GetRenderTarget(renderer);
-    SDL_SetRenderTarget(renderer, textCapture);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-    SDL_RenderClear(renderer);
-}
-
-void Display::endTextCapture() {
-    updateTextCapture();
-    SDL_SetRenderTarget(renderer, mainTarget);
-}
-
-void Display::updateTextCapture() {
-    SDL_Rect rect = {0, 0, sizeW, sizeH};
-    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_RGBA8888,
-                            textPixels, texturePitch) < 0) {
-        std::cerr << "Failed to read pixels: " << SDL_GetError() << std::endl;
-    }
-    checkTextureChange();
-}
-
-void Display::checkTextureChange() {
-    textureChanged = false;
-    for (int i = 0; i < sizeW * sizeH; i++) {
-        if (textPixels[i] != previousTextPixels[i]) {
-            textureChanged = true;
-            break;
-        }
-    }
-    std::memcpy(previousTextPixels, textPixels, sizeW * sizeH * sizeof(Uint32));
-}
-
-bool Display::isPixelOccupied(int x, int y) const {
-    if (x < 0 || x >= sizeW || y < 0 || y >= sizeH) return false;
-    Uint32 pixel = textPixels[y * sizeW + x];
-    Uint8 alpha = (pixel & 0xFF000000) >> 24;
-    return alpha > 50;
-}
+ 
+// Removed: beginTextCapture()
+// Removed: endTextCapture()
+// Removed: updateTextCapture()
+// Removed: checkTextureChange()
+// Removed: isPixelOccupied()
