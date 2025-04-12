@@ -44,7 +44,7 @@ private:
     int totalFrames;
 
     // Constants for pre-rendering
-    static const int PRE_RENDER_SECONDS = 10; // Duration of the animation loop
+    static const int PRE_RENDER_SECONDS = 30; // Duration of the animation loop
     static const int PRE_RENDER_FPS = 30;     // FPS for the pre-rendered animation
 };
 
