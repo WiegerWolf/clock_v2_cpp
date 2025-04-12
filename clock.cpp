@@ -185,12 +185,6 @@ void Clock::draw() {
      
     backgroundManager->draw(renderer);
      
-    // Reset renderer draw color to white before drawing snow, just in case
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    
-    // Draw snow before text
-    snow->draw(renderer);
-      
     // Text capture removed - Draw directly to the main target
       
     // Draw all text elements
@@ -246,10 +240,13 @@ void Clock::draw() {
         );
     }
      
+    // Draw snow after text elements, before FPS counter
+    snow->draw(renderer);
+
     // Text capture removed
     // No need to reset texture change flag
      
-    // Update and render FPS counter
+    // Update and render FPS counter (which also draws itself)
     display->update();
     
     SDL_RenderPresent(renderer);
