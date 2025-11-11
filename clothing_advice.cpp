@@ -49,8 +49,8 @@ if (!CEREBRAS_API_KEY || std::string(CEREBRAS_API_KEY).empty()) {
 
     json payload = {
         {"model", CEREBRAS_MODEL},
-        {"max_tokens", 150}, // Adjusted max_tokens, 312 might be too long for just clothing advice
-        {"temperature", 0.5}, // Slightly increased temperature for potentially more varied advice
+        {"max_tokens", 300}, // Adjusted max_tokens, 312 might be too long for just clothing advice
+        {"temperature", 0.7}, // Slightly increased temperature for potentially more varied advice
         {"messages", {
             {{"role", "system"}, {"content", "You are a helpful assistant providing concise clothing advice."}},
             {{"role", "user"}, {"content",
@@ -88,23 +88,38 @@ try {
                 if (j.contains("error")) {
                     std::string errorMsg = j["error"].dump();
                     std::cerr << "Cerebras API Error: " << errorMsg << std::endl;
-                    return "Weather-based clothing advice is currently unavailable.";
+                    return getBasicAdvice(temperature);
                 }
-                std::string advice = j["choices"][0]["message"]["content"];
-                return advice;
+                // Add proper validation before accessing nested JSON fields
+                if (j.contains("choices") && !j["choices"].empty()) {
+                    auto& choice = j["choices"][0];
+                    if (choice.contains("message") && choice["message"].contains("content")) {
+                        auto& content = choice["message"]["content"];
+                        // Check if content is not null and is a string
+                        if (!content.is_null() && content.is_string()) {
+                            std::string advice = content.get<std::string>();
+                            return !advice.empty() ? advice : getBasicAdvice(temperature);
+                        }
+                    }
+                }
+                std::cerr << "Invalid or empty response from Cerebras API" << std::endl;
+                return getBasicAdvice(temperature);
             } catch (const nlohmann::json::parse_error &e) {
                 std::cerr << "Error processing Cerebras JSON response: " << e.what() << std::endl;
-                return "Could not fetch clothing advice at this time.";
+                return getBasicAdvice(temperature);
+            } catch (const std::exception &e) {
+                std::cerr << "Error extracting content from response: " << e.what() << std::endl;
+                return getBasicAdvice(temperature);
             }
         }
     } else {
         auto err = res.error();
         std::cerr << "HTTP request failed: " << httplib::to_string(err) << std::endl;
-        return "Unable to connect to clothing advice service.";
+        return getBasicAdvice(temperature);
     }
 } catch (const std::exception &e) {
     std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
-    return "An error occurred while fetching clothing advice.";
+    return getBasicAdvice(temperature);
 }
 
     // Fallback to basic advice if API call fails or returns empty/invalid data
