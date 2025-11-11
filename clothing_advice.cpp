@@ -29,11 +29,11 @@ std::string getBasicAdvice(double temperature) {
 
 // Updated function signature to match header (apiKey removed)
 std::string getClothingAdvice(double temperature, int weathercode, double windspeed, const char* language) {
-    // API Key is now read directly from constants.h/cpp via OPENROUTER_API_KEY
-    if (!OPENROUTER_API_KEY || std::string(OPENROUTER_API_KEY).empty()) {
-        std::cerr << "OpenRouter API Key is not configured. Falling back to basic advice." << std::endl;
-        return getBasicAdvice(temperature);
-    }
+// API Key is now read directly from constants.h/cpp via CEREBRAS_API_KEY
+if (!CEREBRAS_API_KEY || std::string(CEREBRAS_API_KEY).empty()) {
+    std::cerr << "Cerebras API Key is not configured. Falling back to basic advice." << std::endl;
+    return getBasicAdvice(temperature);
+}
 
     std::time_t t = std::time(nullptr);
     std::tm* now = std::localtime(&t);
@@ -48,9 +48,9 @@ std::string getClothingAdvice(double temperature, int weathercode, double windsp
     std::string weatherDesc = getWeatherDescription(temperature, weathercode, windspeed, true);
 
     json payload = {
-        {"model", OPENROUTER_MODEL},
-        {"max_tokens", 150}, // Adjusted max_tokens, 312 might be too long for just clothing advice
-        {"temperature", 0.5}, // Slightly increased temperature for potentially more varied advice
+        {"model", CEREBRAS_MODEL},
+        {"max_tokens", 300}, // Adjusted max_tokens, 312 might be too long for just clothing advice
+        {"temperature", 0.7}, // Slightly increased temperature for potentially more varied advice
         {"messages", {
             {{"role", "system"}, {"content", "You are a helpful assistant providing concise clothing advice."}},
             {{"role", "user"}, {"content",
@@ -66,53 +66,61 @@ std::string getClothingAdvice(double temperature, int weathercode, double windsp
         }}
     };
 
-    // Use SSLClient for HTTPS connection to OpenRouter
-    httplib::SSLClient cli(OPENROUTER_API_HOST, OPENROUTER_API_PORT);
-    cli.set_connection_timeout(5); // 5 seconds connection timeout
-    cli.set_read_timeout(10);      // Increased read timeout for potentially slower API responses
-    cli.set_write_timeout(5);      // 5 seconds write timeout
-    cli.enable_server_certificate_verification(false); // Consider enabling verification in production
+try {
+    // Use SSLClient for HTTPS connection to Cerebras
+    httplib::SSLClient cli(CEREBRAS_API_HOST, CEREBRAS_API_PORT);
+    cli.set_connection_timeout(10); // 10 seconds
+    cli.set_read_timeout(10);
 
     httplib::Headers headers = {
-        {"Authorization", std::string("Bearer ") + OPENROUTER_API_KEY},
         {"Content-Type", "application/json"},
-        {"HTTP-Referer", OPENROUTER_REFERER}, // Optional OpenRouter header
-        {"X-Title", OPENROUTER_TITLE}         // Optional OpenRouter header
+        {"Authorization", std::string("Bearer ") + CEREBRAS_API_KEY},
     };
 
-    // Post to the OpenRouter API path
-    auto res = cli.Post(OPENROUTER_API_PATH, headers, payload.dump(), "application/json");
+    // Post to the Cerebras API path
+    auto res = cli.Post(CEREBRAS_API_PATH, headers, payload.dump(), "application/json");
 
-    if (res && res->status == 200) {
-        try {
-            json data = json::parse(res->body);
-            // Check for OpenRouter specific error structure if needed, or general structure
-            if (data.contains("error")) {
-                 // Attempt to extract message, handle potential variations in error structure
-                std::string errorMsg = "Unknown API error";
-                if (data["error"].is_object() && data["error"].contains("message")) {
-                    errorMsg = data["error"]["message"].get<std::string>();
-                } else if (data["error"].is_string()) {
-                    errorMsg = data["error"].get<std::string>();
+    if (res) {
+        if (res->status == 200) {
+            try {
+                nlohmann::json j = nlohmann::json::parse(res->body);
+                // Check for Cerebras specific error structure if needed, or general structure
+                if (j.contains("error")) {
+                    std::string errorMsg = j["error"].dump();
+                    std::cerr << "Cerebras API Error: " << errorMsg << std::endl;
+                    return getBasicAdvice(temperature);
                 }
-                std::cerr << "OpenRouter API Error: " << errorMsg << std::endl;
+                // Add proper validation before accessing nested JSON fields
+                if (j.contains("choices") && !j["choices"].empty()) {
+                    auto& choice = j["choices"][0];
+                    if (choice.contains("message") && choice["message"].contains("content")) {
+                        auto& content = choice["message"]["content"];
+                        // Check if content is not null and is a string
+                        if (!content.is_null() && content.is_string()) {
+                            std::string advice = content.get<std::string>();
+                            return !advice.empty() ? advice : getBasicAdvice(temperature);
+                        }
+                    }
+                }
+                std::cerr << "Invalid or empty response from Cerebras API" << std::endl;
+                return getBasicAdvice(temperature);
+            } catch (const nlohmann::json::parse_error &e) {
+                std::cerr << "Error processing Cerebras JSON response: " << e.what() << std::endl;
+                return getBasicAdvice(temperature);
+            } catch (const std::exception &e) {
+                std::cerr << "Error extracting content from response: " << e.what() << std::endl;
                 return getBasicAdvice(temperature);
             }
-            if (data.contains("choices") && !data["choices"].empty()) {
-                std::string advice = data["choices"][0]["message"]["content"].get<std::string>();
-                return !advice.empty() ? advice : getBasicAdvice(temperature);
-            }
-        } catch (const json::parse_error& e) {
-            std::cerr << "JSON parse error: " << e.what() << std::endl;
-        } catch (const std::exception& e) {
-            std::cerr << "Error processing OpenRouter JSON response: " << e.what() << std::endl;
         }
     } else {
-        std::string errorBody = res ? res->body : "No response body";
-        std::cerr << "OpenRouter API request failed: "
-                  << (res ? std::to_string(res->status) : "No response")
-                  << " - " << errorBody << std::endl;
+        auto err = res.error();
+        std::cerr << "HTTP request failed: " << httplib::to_string(err) << std::endl;
+        return getBasicAdvice(temperature);
     }
+} catch (const std::exception &e) {
+    std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
+    return getBasicAdvice(temperature);
+}
 
     // Fallback to basic advice if API call fails or returns empty/invalid data
     return getBasicAdvice(temperature);

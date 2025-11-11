@@ -17,10 +17,10 @@ endif()
 # Enable Link Time Optimization
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
-# Option to provide OpenRouter API Key at compile time
-option(OPENROUTER_API_KEY_DEFINE "Provide the OpenRouter API Key" "")
-if(NOT OPENROUTER_API_KEY_DEFINE)
-    message(FATAL_ERROR "OPENROUTER_API_KEY_DEFINE must be provided via CMake options, e.g., -DOPENROUTER_API_KEY_DEFINE='your-key'")
+# Option to provide Cerebras API Key at compile time
+option(CEREBRAS_API_KEY_DEFINE "Provide the Cerebras API Key" "")
+if(NOT CEREBRAS_API_KEY_DEFINE)
+    message(FATAL_ERROR "CEREBRAS_API_KEY_DEFINE must be provided via CMake options, e.g., -DCEREBRAS_API_KEY_DEFINE='your-key'")
 endif()
 
 find_package(SDL2 REQUIRED)
@@ -66,5 +66,5 @@ target_link_libraries(${PROJECT_NAME}
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     CPPHTTPLIB_OPENSSL_SUPPORT
-    OPENROUTER_API_KEY_DEFINE="${OPENROUTER_API_KEY_DEFINE}"
+    CEREBRAS_API_KEY_DEFINE="${CEREBRAS_API_KEY_DEFINE}"
 )
