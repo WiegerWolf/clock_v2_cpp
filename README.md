@@ -19,7 +19,7 @@ sudo apt install -y cmake gcc make g++ libsdl2-dev \
 Add .env file to the root of the project with the following content:
 
 ```bash
-OPENROUTER_API_KEY='your_api_key'
+CEREBRAS_API_KEY='your_api_key'
 ```
 
 Then run the following command:

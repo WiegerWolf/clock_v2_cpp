@@ -1,16 +1,15 @@
 #include "constants.h"
 
-// --- LLM Configuration (OpenRouter) ---
-#ifndef OPENROUTER_API_KEY_DEFINE
-#error "OPENROUTER_API_KEY_DEFINE is not set. Provide it via CMake -DOPENROUTER_API_KEY_DEFINE='your-key'"
+// --- LLM Configuration (Cerebras) ---
+#ifndef CEREBRAS_API_KEY_DEFINE
+#error "CEREBRAS_API_KEY_DEFINE is not set. Provide it via CMake -DCEREBRAS_API_KEY_DEFINE='your-key'"
 #endif
-const char* OPENROUTER_API_KEY = OPENROUTER_API_KEY_DEFINE;
-const char* OPENROUTER_API_HOST = "openrouter.ai";
-const int OPENROUTER_API_PORT = 443;
-const char* OPENROUTER_API_PATH = "/api/v1/chat/completions";
-const char* OPENROUTER_MODEL = "openai/gpt-oss-120b";
-const char* OPENROUTER_REFERER = "https://clock.tsatsin.com";
-const char* OPENROUTER_TITLE = "Digital clock";
+const char* CEREBRAS_API_KEY = CEREBRAS_API_KEY_DEFINE;
+const char* CEREBRAS_API_HOST = "api.cerebras.ai";
+const int CEREBRAS_API_PORT = 443;
+const char* CEREBRAS_API_PATH = "/v1/chat/completions";
+const char* CEREBRAS_MODEL = "gpt-oss-120b";
+
 const char* CLOTHING_ADVICE_LANGUAGE = "ru";
 
 // --- Background Image Configuration ---

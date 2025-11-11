@@ -11,15 +11,15 @@ if [ -f .env ]; then
   set +a # Stop automatically exporting variables                                                                      
 fi                                                                                                                     
                                                                                                                        
-# Check if OPENROUTER_API_KEY environment variable is set (either from .env or externally)                             
-if [ -z "$OPENROUTER_API_KEY" ]; then                                                                                  
-  echo "Error: OPENROUTER_API_KEY environment variable is not set."                                                    
-  echo "Please set it either in a .env file or export it before running this script:"                                  
-  echo "Example .env file:"                                                                                            
-  echo "OPENROUTER_API_KEY='your-openrouter-key'"                                                                      
-  echo "Or run: export OPENROUTER_API_KEY='your-openrouter-key'"                                                       
-  exit 1                                                                                                               
-fi                                                                                                                     
+# Check if CEREBRAS_API_KEY environment variable is set (either from .env or externally)
+if [ -z "$CEREBRAS_API_KEY" ]; then
+  echo "Error: CEREBRAS_API_KEY environment variable is not set."
+  echo "Please set it either in a .env file or export it before running this script:"
+  echo "Example .env file:"
+  echo "CEREBRAS_API_KEY='your-cerebras-key'"
+  echo "Or run: export CEREBRAS_API_KEY='your-cerebras-key'"
+  exit 1
+fi
                                                                                                                        
 # Define the build directory                                                                                            
 BUILD_DIR="build"                                                                                                        
@@ -29,8 +29,7 @@ mkdir -p "$BUILD_DIR"
                                                                                                                        
 # Configure the project with CMake, passing the API key                                                                
 echo "Configuring project..."                                                                                          
-cmake -B "$BUILD_DIR" -DOPENROUTER_API_KEY_DEFINE="$OPENROUTER_API_KEY"                                                
-                                                                                                                       
+cmake -B "$BUILD_DIR" -DCEREBRAS_API_KEY_DEFINE="$CEREBRAS_API_KEY"                                                                                                                       
 # Build the project                                                                                                    
 echo "Building project..."                                                                                              
 cmake --build "$BUILD_DIR"                                                                                             

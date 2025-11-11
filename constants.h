@@ -1,14 +1,13 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-// LLM Configuration (OpenRouter)
-extern const char* OPENROUTER_API_KEY;
-extern const char* OPENROUTER_API_HOST;
-extern const int OPENROUTER_API_PORT;
-extern const char* OPENROUTER_API_PATH;
-extern const char* OPENROUTER_MODEL;
-extern const char* OPENROUTER_REFERER; // Optional: Your site URL for rankings
-extern const char* OPENROUTER_TITLE;   // Optional: Your site name for rankings
+// LLM Configuration (Cerebras)
+extern const char* CEREBRAS_API_KEY;
+extern const char* CEREBRAS_API_HOST;
+extern const int CEREBRAS_API_PORT;
+extern const char* CEREBRAS_API_PATH;
+extern const char* CEREBRAS_MODEL;
+
 extern const char* CLOTHING_ADVICE_LANGUAGE;
 
 // Background Image Configuration
