@@ -151,10 +151,6 @@ bool Clock::shouldUpdateAdvice() {
 }
 
 void Clock::update() {
-    auto now = std::chrono::system_clock::now();
-    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-    std::tm* now_tm = std::localtime(&currentTime);
-
     snow->update(); // Update snow physics
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
