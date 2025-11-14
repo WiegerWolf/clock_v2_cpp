@@ -30,7 +30,7 @@ private:
     std::string clothingAdvice;
 
     void handleEvents();
-    bool shouldUpdateAdvice();
+    bool shouldUpdateAdvice() const;
     void update();
     void draw();
 };

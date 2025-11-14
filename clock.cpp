@@ -17,47 +17,49 @@
 #include <iomanip>
 #include <sstream>
 
-Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr), weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60), clothingAdvice("") {}
+Clock::Clock() : running(false), window(nullptr), renderer(nullptr), display(nullptr), snow(nullptr),
+                 weatherAPI(nullptr), backgroundManager(nullptr), lastAdviceUpdate(0), adviceUpdateInterval(15 * 60) {
+}
 
 Clock::~Clock() {
-    running = false;  // Stop the main loop first
-    
-    // Delete snow system first since it depends on the renderer
+    running = false; // Stop the main loop first
+
+    // Delete the snow system first since it depends on the renderer
     if (snow) {
         delete snow;
         snow = nullptr;
     }
-    
-    // Delete display next as it also uses renderer
+
+    // Delete the display next as it also uses renderer
     if (display) {
         delete display;
         display = nullptr;
     }
-    
+
     // Stop and delete weather API
     if (weatherAPI) {
         weatherAPI->stop();
         delete weatherAPI;
         weatherAPI = nullptr;
     }
-    
+
     // Delete background manager
     if (backgroundManager) {
         delete backgroundManager;
         backgroundManager = nullptr;
     }
-    
-    // Finally clean up SDL resources
+
+    // Finally, clean up SDL resources
     if (renderer) {
         SDL_DestroyRenderer(renderer);
         renderer = nullptr;
     }
-    
+
     if (window) {
         SDL_DestroyWindow(window);
         window = nullptr;
     }
-    
+
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
@@ -85,7 +87,8 @@ bool Clock::initialize() {
         return false;
     }
 
-    window = SDL_CreateWindow("Digital Clock C++", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Digital Clock C++", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
+                              SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
         std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
         TTF_Quit();
@@ -105,12 +108,12 @@ bool Clock::initialize() {
     }
 
     display = new Display(renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
-    display->setFpsVisible(false);  // Hide FPS counter
-    
+    display->setFpsVisible(false); // Hide FPS counter
+
     snow = new SnowSystem(NUM_SNOWFLAKES, SCREEN_WIDTH, SCREEN_HEIGHT);
-    snow->initialize(renderer);  // Initialize snow system with renderer
+    snow->initialize(renderer); // Initialize the snow system with a renderer
     weatherAPI = new WeatherAPI();
-    weatherAPI->start();  // Start background weather updates
+    weatherAPI->start(); // Start background weather updates
     backgroundManager = new BackgroundManager();
 
     running = true;
@@ -134,8 +137,7 @@ void Clock::handleEvents() {
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             running = false;
-        }
-        else if (event.type == SDL_WINDOWEVENT) {
+        } else if (event.type == SDL_WINDOWEVENT) {
             if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                 SDL_ShowCursor(SDL_DISABLE);
             }
@@ -143,7 +145,7 @@ void Clock::handleEvents() {
     }
 }
 
-bool Clock::shouldUpdateAdvice() {
+bool Clock::shouldUpdateAdvice() const {
     time_t currentTime;
     time(&currentTime);
     return difftime(currentTime, lastAdviceUpdate) > adviceUpdateInterval;
@@ -183,7 +185,7 @@ void Clock::draw() {
     // Get current time
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-    std::tm* now_tm = std::localtime(&currentTime);
+    std::tm *now_tm = std::localtime(&currentTime);
 
     TextStyle defaultStyle;
     defaultStyle.color = WHITE_COLOR;
@@ -193,7 +195,7 @@ void Clock::draw() {
     // Draw time
     std::stringstream timeStream;
     timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour
-               << ":" << std::setfill('0') << std::setw(2) << now_tm->tm_min;
+            << ":" << std::setfill('0') << std::setw(2) << now_tm->tm_min;
     display->renderText(
         timeStream.str(),
         FontSize::LARGE,
@@ -205,9 +207,9 @@ void Clock::draw() {
     // Draw date
     std::stringstream dateStream;
     dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", "
-               << now_tm->tm_mday << " "
-               << MONTHS_RU.at(now_tm->tm_mon + 1) << " "
-               << (now_tm->tm_year + 1900) << " года";
+            << now_tm->tm_mday << " "
+            << MONTHS_RU.at(now_tm->tm_mon + 1) << " "
+            << (now_tm->tm_year + 1900) << " года";
     display->renderText(
         dateStream.str(),
         FontSize::SMALL,
