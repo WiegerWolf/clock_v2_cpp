@@ -175,14 +175,17 @@ void Clock::update() {
 }
 
 void Clock::draw() {
+    auto drawStart = std::chrono::high_resolution_clock::now();
+
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    // Draw background first
+    auto t1 = std::chrono::high_resolution_clock::now();
     backgroundManager->draw(renderer);
+    auto t2 = std::chrono::high_resolution_clock::now();
 
-    // Draw snow on top of background
     snow->draw(renderer);
+    auto t3 = std::chrono::high_resolution_clock::now();
 
     // Get current time
     auto now = std::chrono::system_clock::now();
@@ -247,11 +250,26 @@ void Clock::draw() {
             adviceY
         );
     }
+    auto t4 = std::chrono::high_resolution_clock::now();
 
-    // Update and render FPS
     display->updateFps();
     display->renderFps();
     display->cleanupCache();
 
     SDL_RenderPresent(renderer);
+    auto t5 = std::chrono::high_resolution_clock::now();
+
+    // Print timing every 60 frames
+    static int frameCount = 0;
+    if (++frameCount % 60 == 0) {
+        auto bg = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+        auto snow = std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2).count();
+        auto text = std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3).count();
+        auto present = std::chrono::duration_cast<std::chrono::milliseconds>(t5 - t4).count();
+        auto total = std::chrono::duration_cast<std::chrono::milliseconds>(t5 - drawStart).count();
+
+        std::cout << "Frame timing - BG: " << bg << "ms, Snow: " << snow
+                  << "ms, Text: " << text << "ms, Present: " << present
+                  << "ms, Total: " << total << "ms" << std::endl;
+    }
 }
