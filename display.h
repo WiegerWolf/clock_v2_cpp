@@ -116,7 +116,9 @@ private:
     TTF_Font* loadFont(const char* path, int size);
     int calculateLargeFontSize();
     
-    SDL_Texture* getOrCreateTexture(const std::string& text, FontSize size, SDL_Color color);
+    SDL_Texture* getOrCreateTexture(const std::string& text, FontSize size, SDL_Color color,
+                                   int* outWidth = nullptr, int* outHeight = nullptr);
+
     SDL_Texture* createTextTexture(const std::string& text, TTF_Font* font, SDL_Color color, 
                                    int& outWidth, int& outHeight);
     

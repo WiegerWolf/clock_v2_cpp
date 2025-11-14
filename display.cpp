@@ -141,13 +141,16 @@ SDL_Texture* Display::createTextTexture(const std::string& text, TTF_Font* font,
     return texture;
 }
 
-SDL_Texture* Display::getOrCreateTexture(const std::string& text, FontSize size, SDL_Color color) {
+SDL_Texture* Display::getOrCreateTexture(const std::string& text, FontSize size, SDL_Color color,
+                                        int* outWidth, int* outHeight) {
     CacheKey key{text, size, color};
     
     // Check cache
     auto it = textureCache.find(key);
     if (it != textureCache.end()) {
         it->second.lastUsed = std::chrono::steady_clock::now();
+        if (outWidth) *outWidth = it->second.width;
+        if (outHeight) *outHeight = it->second.height;
         return it->second.texture.get();
     }
 
@@ -175,6 +178,8 @@ SDL_Texture* Display::getOrCreateTexture(const std::string& text, FontSize size,
         std::forward_as_tuple(rawTexture, width, height, memorySize)
     );
 
+    if (outWidth) *outWidth = width;
+    if (outHeight) *outHeight = height;
     return result.first->second.texture.get();
 }
 
@@ -216,16 +221,9 @@ void Display::renderTextureWithShadow(SDL_Texture* texture, const SDL_Rect& rect
 
 void Display::renderText(const std::string& text, FontSize size, const TextStyle& style, 
                         int x, int y) {
-    SDL_Texture* texture = getOrCreateTexture(text, size, style.color);
+    int width, height;
+    SDL_Texture* texture = getOrCreateTexture(text, size, style.color, &width, &height);
     if (!texture) return;
-
-    // Get texture dimensions from cache
-    CacheKey key{text, size, style.color};
-    auto it = textureCache.find(key);
-    if (it == textureCache.end()) return;
-
-    int width = it->second.width;
-    int height = it->second.height;
 
     // Calculate position based on alignment
     int posX = x;
