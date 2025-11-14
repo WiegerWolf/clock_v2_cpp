@@ -102,10 +102,13 @@ private:
     float currentFps;
     bool showFps;
     std::chrono::steady_clock::time_point lastFrameTime;
+    size_t frameCounter;  // Track frames for periodic cache cleanup
+    std::chrono::steady_clock::time_point lastCacheCleanup;
 
     // Configuration
     static constexpr size_t MAX_CACHE_MEMORY = 50 * 1024 * 1024; // 50MB
     static constexpr int CACHE_LIFETIME_SECONDS = 30;
+    static constexpr int CACHE_CLEANUP_INTERVAL_SECONDS = 5;  // Cleanup every 5 seconds
     static constexpr int SHADOW_OFFSET = 2;
     static constexpr Uint8 SHADOW_ALPHA = 128;
 

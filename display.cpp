@@ -22,6 +22,8 @@ Display::Display(SDL_Renderer* renderer, int screenWidth, int screenHeight)
     , currentFps(0.0f)
     , showFps(false)
     , lastFrameTime(std::chrono::steady_clock::now())
+    , frameCounter(0)
+    , lastCacheCleanup(std::chrono::steady_clock::now())
 {
     // Calculate and load fonts
     int largeFontSize = calculateLargeFontSize();
@@ -326,23 +328,29 @@ void Display::renderFps() {
 
 void Display::cleanupCache() {
     auto now = std::chrono::steady_clock::now();
-    std::vector<CacheKey> toRemove;
-
-    for (const auto& pair : textureCache) {
+    
+    // Only cleanup every CACHE_CLEANUP_INTERVAL_SECONDS seconds
+    auto timeSinceLastCleanup = std::chrono::duration_cast<std::chrono::seconds>(
+        now - lastCacheCleanup
+    );
+    
+    if (timeSinceLastCleanup.count() < CACHE_CLEANUP_INTERVAL_SECONDS) {
+        return;  // Skip cleanup if not enough time has passed
+    }
+    
+    lastCacheCleanup = now;
+    
+    // Use iterator directly for efficient removal
+    for (auto it = textureCache.begin(); it != textureCache.end(); ) {
         auto age = std::chrono::duration_cast<std::chrono::seconds>(
-            now - pair.second.lastUsed
+            now - it->second.lastUsed
         );
         
         if (age.count() > CACHE_LIFETIME_SECONDS) {
-            toRemove.push_back(pair.first);
-        }
-    }
-
-    for (const auto& key : toRemove) {
-        auto it = textureCache.find(key);  // <-- CHANGE THIS
-        if (it != textureCache.end()) {     // <-- ADD THIS CHECK
-            currentCacheMemory -= it->second.memorySize;  // <-- USE ITERATOR
-            textureCache.erase(it);         // <-- USE ITERATOR
+            currentCacheMemory -= it->second.memorySize;
+            it = textureCache.erase(it);  // Erase returns next valid iterator
+        } else {
+            ++it;  // Only increment if we didn't erase
         }
     }
 }
