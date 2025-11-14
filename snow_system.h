@@ -39,6 +39,7 @@ private:
     // Snowflake data
     std::vector<Snowflake> snowflakes;
     std::mt19937 rng;
+    bool initialized = false;
 
     // Helper functions
     SDL_Texture* createCircleTexture(int radius, Uint8 alpha);

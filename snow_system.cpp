@@ -13,6 +13,7 @@ SnowSystem::SnowSystem(int flakeCount, int screenWidth, int screenHeight)
     , snowTexLarge(nullptr)
     , rng(std::random_device{}())
 {
+    initialized = false;
     snowflakes.reserve(numFlakes);
 }
 
@@ -116,10 +117,15 @@ void SnowSystem::initialize(SDL_Renderer* r) {
         snowflakes.push_back(createSnowflake());
     }
 
+    initialized = true;
     std::cout << "Snow system initialized with " << numFlakes << " flakes" << std::endl;
 }
 
 void SnowSystem::update() {
+    if (!initialized) {
+        return;
+    }
+
     std::uniform_real_distribution<float> driftChangeDist(-0.02f, 0.02f);
 
     for (auto& snow : snowflakes) {
@@ -152,6 +158,10 @@ void SnowSystem::update() {
 }
 
 void SnowSystem::draw(SDL_Renderer* renderer) {
+    if (!initialized) {
+        return;
+    }
+
     if (!renderer || snowflakes.empty()) {
         return;
     }
