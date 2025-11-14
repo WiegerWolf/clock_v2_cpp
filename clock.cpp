@@ -8,8 +8,8 @@
 #include "config.h"
 #include "weather.h"
 #include "clothing_advice.h"
-#include <SDL_ttf.h>
-#include <SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_image.h>
 #include <iostream>
 #include <cmath>
 #include <ctime>
@@ -126,7 +126,6 @@ void Clock::run() {
         handleEvents();
         update();
         draw();
-        // SDL_Delay(1); // Removed: VSync should handle frame pacing
     }
 }
 
@@ -151,10 +150,6 @@ bool Clock::shouldUpdateAdvice() {
 }
 
 void Clock::update() {
-    auto now = std::chrono::system_clock::now();
-    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
-    std::tm* now_tm = std::localtime(&currentTime);
-
     snow->update(); // Update snow physics
     backgroundManager->update(SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -182,36 +177,43 @@ void Clock::draw() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    // Draw background first
     backgroundManager->draw(renderer);
-
-    // Draw snow on top of background
     snow->draw(renderer);
 
-    // Text capture removed - Draw directly to the main target
-    // Draw all text elements
+    // Get current time
     auto now = std::chrono::system_clock::now();
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm* now_tm = std::localtime(&currentTime);
 
+    TextStyle defaultStyle;
+    defaultStyle.color = WHITE_COLOR;
+    defaultStyle.alignment = TextAlign::CENTER;
+    defaultStyle.withShadow = true;
+
     // Draw time
     std::stringstream timeStream;
-    timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour << ":" << std::setfill('0') << std::setw(2) << now_tm->tm_min;
+    timeStream << std::setfill('0') << std::setw(2) << now_tm->tm_hour
+               << ":" << std::setfill('0') << std::setw(2) << now_tm->tm_min;
     display->renderText(
         timeStream.str(),
-        display->fontLarge,
-        WHITE_COLOR,
-        SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - SCREEN_HEIGHT / 10
+        FontSize::LARGE,
+        defaultStyle,
+        SCREEN_WIDTH / 2,
+        SCREEN_HEIGHT / 2 - SCREEN_HEIGHT / 10
     );
 
     // Draw date
     std::stringstream dateStream;
-    dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", " << now_tm->tm_mday << " " << MONTHS_RU.at(now_tm->tm_mon + 1) << " " << (now_tm->tm_year + 1900) << " года";
+    dateStream << WEEKDAYS_RU.at(now_tm->tm_wday) << ", "
+               << now_tm->tm_mday << " "
+               << MONTHS_RU.at(now_tm->tm_mon + 1) << " "
+               << (now_tm->tm_year + 1900) << " года";
     display->renderText(
         dateStream.str(),
-        display->fontSmall,
-        WHITE_COLOR,
-        SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.075
+        FontSize::SMALL,
+        defaultStyle,
+        SCREEN_WIDTH / 2,
+        SCREEN_HEIGHT * 0.075
     );
 
     // Draw weather
@@ -224,29 +226,27 @@ void Clock::draw() {
     int weatherY = SCREEN_HEIGHT * 0.75;
     display->renderText(
         weatherStr,
-        display->fontSmall,
-        WHITE_COLOR,
-        SCREEN_WIDTH / 2, weatherY
+        FontSize::SMALL,
+        defaultStyle,
+        SCREEN_WIDTH / 2,
+        weatherY
     );
 
     // Draw clothing advice
     if (!clothingAdvice.empty()) {
-        int adviceY = weatherY + TTF_FontLineSkip(display->fontSmall) * 1.2;
+        int adviceY = weatherY + 60; // Approximate line skip
         display->renderMultilineText(
             clothingAdvice,
-            display->fontExtraSmall,
-            WHITE_COLOR,
+            FontSize::EXTRA_SMALL,
+            defaultStyle,
             SCREEN_WIDTH / 2,
-            adviceY,
-            1.2f
+            adviceY
         );
     }
 
-    // Text capture removed
-    // No need to reset texture change flag
-     
-    // Update and render FPS counter (which also draws itself)
-    display->update();
-    
+    display->updateFps();
+    display->renderFps();
+    display->cleanupCache();
+
     SDL_RenderPresent(renderer);
 }

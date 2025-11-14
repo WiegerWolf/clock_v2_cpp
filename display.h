@@ -1,100 +1,132 @@
-// display.h
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include <vector>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <string>
 #include <unordered_map>
 #include <memory>
 #include <chrono>
- 
-class BackgroundManager;
- 
-// Removed original TextKey, TextKeyHash, CachedTexture structs
-  
+#include <vector>  // <-- ADD THIS
+
+// Text alignment options
+enum class TextAlign {
+    LEFT,
+    CENTER,
+    RIGHT
+};
+
+// Text rendering options
+struct TextStyle {
+    SDL_Color color = {255, 255, 255, 255};
+    bool withShadow = true;
+    TextAlign alignment = TextAlign::CENTER;
+};
+
+// Font size categories
+enum class FontSize {
+    EXTRA_SMALL,
+    SMALL,
+    LARGE
+};
+
 class Display {
 public:
-    // Removed misplaced TextKey members and operator==
-    Display(SDL_Renderer* renderer, int width, int height);
+    Display(SDL_Renderer* renderer, int screenWidth, int screenHeight);
     ~Display();
- 
-    void clear();
-    void update();
-    void renderText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int centerY, bool isDynamic = false); // isDynamic is now unused internally
-    void renderMultilineText(const std::string& text, TTF_Font* font, SDL_Color color, int centerX, int startY, float lineSpacing = 1.0f); // Default line spacing
- 
-    // Removed text capture related methods:
-    // isPixelOccupied, beginTextCapture, endTextCapture, hasTextureChanged, resetTextureChangeFlag
 
+    // Main rendering methods
+    void renderText(const std::string& text, FontSize size, const TextStyle& style, int x, int y);
+    void renderMultilineText(const std::string& text, FontSize size, const TextStyle& style, 
+                            int x, int y, int maxWidth = 0);
+
+    // FPS counter
+    void updateFps();
+    void renderFps();
     void setFpsVisible(bool visible) { showFps = visible; }
-    bool isFpsVisible() const { return showFps; }
 
-    TTF_Font* fontLarge;
-    TTF_Font* fontSmall;
-    TTF_Font* fontExtraSmall;
-    SDL_Renderer* renderer;
-    SDL_Surface* screenSurface;
-    BackgroundManager* backgroundManager;
+    // Cache management
+    void cleanupCache();
+    void clearCache();
+
+    // Get font for external size calculations if needed
+    TTF_Font* getFont(FontSize size) const;
 
 private:
-    int sizeW, sizeH;
-    Uint32 frameCounter;  // Track frames for cache management
- 
-    // FPS counter
-    std::chrono::high_resolution_clock::time_point lastFrameTime;
-    float currentFps;
-    void updateFpsCounter();
-    void renderFpsCounter();
- 
-    // Texture caching (simplified - no dynamic flag, frame counter, memory tracking needed anymore)
-    struct SimpleTextKey {
+    // Core resources
+    SDL_Renderer* renderer;
+    int screenWidth;
+    int screenHeight;
+
+    // Fonts
+    std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> fontLarge;
+    std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> fontSmall;
+    std::unique_ptr<TTF_Font, decltype(&TTF_CloseFont)> fontExtraSmall;
+
+    // Text cache
+    struct CacheKey {
         std::string text;
-        TTF_Font* font;
+        FontSize fontSize;
         SDL_Color color;
- 
-        bool operator==(const SimpleTextKey& other) const {
-            return text == other.text && font == other.font &&
-                   color.r == other.color.r && color.g == other.color.g &&
-                   color.b == other.color.b && color.a == other.color.a;
+
+        bool operator==(const CacheKey& other) const {
+            return text == other.text && 
+                   fontSize == other.fontSize &&
+                   color.r == other.color.r &&
+                   color.g == other.color.g &&
+                   color.b == other.color.b &&
+                   color.a == other.color.a;
         }
     };
-    struct SimpleTextKeyHash {
-        std::size_t operator()(const SimpleTextKey& k) const; // Implementation in .cpp
-    };
-    static const Uint32 CACHE_LIFETIME = 300;        // ~5 seconds at 60fps
-    // static const size_t MAX_CACHE_SIZE = 100;     // Removed - only memory limit matters now
-    static const size_t MAX_CACHE_MEMORY = 32*1024*1024;  // 32MB max texture cache
-    size_t currentCacheMemory;                       // Current texture cache memory usage
- 
-    int calculateFontSize();
-    std::vector<std::string> wrapText(const std::string& text, TTF_Font* font, int maxWidth);
-    bool needsTwoLines(const std::string& text, TTF_Font* font, int maxWidth);
-    std::pair<std::string, std::string> splitIntoTwoLines(const std::string& text);
- 
-    // Removed text capture members:
-    // textCapture, textPixels, texturePitch, mainTarget, textureChanged, previousTextPixels
-    // Removed text capture methods:
-    // updateTextCapture, checkTextureChange
- 
-    // Texture caching
-    struct SimpleCachedTexture {
-        SDL_Texture* texture;
-        Uint32 lastUsedFrame; // Use frame counter for simple LRU
-        SDL_Rect rect;        // Store size
-        size_t memorySize;    // Estimated memory
-    };
-    std::unordered_map<SimpleTextKey, SimpleCachedTexture, SimpleTextKeyHash> textureCache;
-    SDL_Texture* getCachedTexture(const std::string& text, TTF_Font* font, SDL_Color color); // Removed isDynamic
-    void cleanupCache();
-    SDL_Texture* createTextTexture(const std::string& text, TTF_Font* font, SDL_Color color, SDL_Rect& outRect);
- 
-    // Memory management
-    size_t estimateTextureMemory(int width, int height);
-    void removeOldestTexture();
 
-    bool showFps = false;  // FPS counter visibility flag
+    struct CacheKeyHash {
+        std::size_t operator()(const CacheKey& k) const;
+    };
+
+    struct CachedTexture {
+        std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)> texture;
+        int width;
+        int height;
+        std::chrono::steady_clock::time_point lastUsed;
+        size_t memorySize;
+
+        CachedTexture(SDL_Texture* tex, int w, int h, size_t mem)
+            : texture(tex, SDL_DestroyTexture), width(w), height(h), 
+              lastUsed(std::chrono::steady_clock::now()), memorySize(mem) {}
+    };
+
+    std::unordered_map<CacheKey, CachedTexture, CacheKeyHash> textureCache;
+    size_t currentCacheMemory;
+
+    // FPS tracking
+    float currentFps;
+    bool showFps;
+    std::chrono::steady_clock::time_point lastFrameTime;
+    size_t frameCounter;  // Track frames for periodic cache cleanup
+    std::chrono::steady_clock::time_point lastCacheCleanup;
+
+    // Configuration
+    static constexpr size_t MAX_CACHE_MEMORY = 50 * 1024 * 1024; // 50MB
+    static constexpr int CACHE_LIFETIME_SECONDS = 30;
+    static constexpr int CACHE_CLEANUP_INTERVAL_SECONDS = 5;  // Cleanup every 5 seconds
+    static constexpr int SHADOW_OFFSET = 2;
+    static constexpr Uint8 SHADOW_ALPHA = 128;
+
+    // Helper methods
+    TTF_Font* loadFont(const char* path, int size);
+    int calculateLargeFontSize();
+    
+    SDL_Texture* getOrCreateTexture(const std::string& text, FontSize size, SDL_Color color,
+                                   int* outWidth = nullptr, int* outHeight = nullptr);
+
+    SDL_Texture* createTextTexture(const std::string& text, TTF_Font* font, SDL_Color color, 
+                                   int& outWidth, int& outHeight);
+    
+    void renderTextureWithShadow(SDL_Texture* texture, const SDL_Rect& rect, 
+                                 SDL_Color color, bool withShadow);
+    
+    std::vector<std::string> wrapText(const std::string& text, TTF_Font* font, int maxWidth);
+    void removeOldestCacheEntry();
 };
 
 #endif // DISPLAY_H

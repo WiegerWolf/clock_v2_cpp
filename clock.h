@@ -2,7 +2,7 @@
 #ifndef CLOCK_H
 #define CLOCK_H
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <string>
 
 class Display;
