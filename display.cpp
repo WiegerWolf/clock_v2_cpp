@@ -27,8 +27,8 @@ Display::Display(SDL_Renderer* renderer, int screenWidth, int screenHeight)
     int largeFontSize = calculateLargeFontSize();
 
     fontLarge = makeFontPtr(loadFont(FONT_PATH, largeFontSize));
-    fontSmall = makeFontPtr(loadFont(FONT_PATH, largeFontSize / 8));
-    fontExtraSmall = makeFontPtr(loadFont(FONT_PATH, largeFontSize / 12));
+    fontSmall = makeFontPtr(loadFont(FONT_PATH, std::max(1, largeFontSize / 8)));
+    fontExtraSmall = makeFontPtr(loadFont(FONT_PATH, std::max(1, largeFontSize / 12)));
 
     if (!fontLarge || !fontSmall || !fontExtraSmall) {
         std::cerr << "Warning: Failed to load one or more fonts" << std::endl;
@@ -40,6 +40,9 @@ Display::~Display() {
 }
 
 TTF_Font* Display::loadFont(const char* path, int size) {
+    // Ensure size is at least 1 to prevent TTF_OpenFont failure
+    size = std::max(1, size);
+    
     TTF_Font* font = TTF_OpenFont(path, size);
     if (!font) {
         std::cerr << "Failed to load font " << path << " size " << size
