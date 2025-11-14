@@ -23,7 +23,7 @@ const int SHADOW_RADIUS = 3;       // Radius for the soft shadow spread (adjust 
 const int SHADOW_SAMPLES = 4;      // Reduced layers for soft shadow (adjust for quality/performance)
 
 // Snow configuration
-const int NUM_SNOWFLAKES = 1000;  // Increased number of snowflakes
+const int NUM_SNOWFLAKES = 500;  // Increased number of snowflakes
 
 // Russian language configurations
 extern const std::map<int, std::string> MONTHS_RU;

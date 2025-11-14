@@ -156,12 +156,6 @@ void SnowSystem::draw(SDL_Renderer* renderer) {
         return;
     }
 
-    // Sort by depth for layering effect
-    std::sort(snowflakes.begin(), snowflakes.end(),
-              [](const Snowflake& a, const Snowflake& b) {
-                  return a.depth < b.depth;
-              });
-
     SDL_Texture* textures[] = { snowTexSmall, snowTexMedium, snowTexLarge };
 
     for (const auto& snow : snowflakes) {
