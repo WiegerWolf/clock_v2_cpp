@@ -214,24 +214,27 @@ void BackgroundManager::loadImageAsync(const std::string& url, int width, int he
         return;
     }
     
-    // Check if previous thread timed out
-    time_t now = time(nullptr);
-    time_t lastStart = lastThreadStart.load();
-    if (lastStart > 0 && (now - lastStart) < THREAD_TIMEOUT) {
-        // Previous thread still might be running
-        if (backgroundThread.joinable()) {
-            LOG_WARNING("Previous background thread still running after %ld seconds, detaching", now - lastStart);
-            backgroundThread.detach(); // Don't block, just detach
-        }
-    }
-    
-    // Detach previous thread to avoid blocking (fire-and-forget pattern)
+    // CRITICAL: Join previous thread before starting a new one
+    // This ensures we maintain ownership and prevent use-after-free
     if (backgroundThread.joinable()) {
-        LOG_DEBUG("Detaching previous background thread before starting new one");
-        backgroundThread.detach();
+        LOG_DEBUG("Joining previous background thread before starting new one");
+        
+        // Signal the thread to stop if it's taking too long
+        time_t now = time(nullptr);
+        time_t lastStart = lastThreadStart.load();
+        if (lastStart > 0 && (now - lastStart) > THREAD_TIMEOUT) {
+            LOG_WARNING("Previous background thread running for %ld seconds, signaling stop", now - lastStart);
+            shouldStopThread.store(true);
+        }
+        
+        // Always join - never detach
+        backgroundThread.join();
+        shouldStopThread.store(false); // Reset for next thread
+        LOG_DEBUG("Previous background thread joined successfully");
     }
     
     LOG_INFO("Starting background image load from: %s", url.c_str());
+    time_t now = time(nullptr);
     lastThreadStart.store(now);
     threadCount.fetch_add(1);
     isLoading.store(true);
@@ -398,16 +401,20 @@ void BackgroundManager::update(int width, int height) {
     time_t currentTime;
     time(&currentTime);
     
-    // Check for hung thread
+    // Check for hung thread - signal it to stop but don't detach
     time_t lastStart = lastThreadStart.load();
     if (isLoading.load() && lastStart > 0 && (currentTime - lastStart) > THREAD_TIMEOUT) {
-        LOG_ERROR("Background thread appears hung (running for %ld seconds), forcing reset", 
+        LOG_ERROR("Background thread appears hung (running for %ld seconds), signaling stop", 
                   currentTime - lastStart);
+        
+        // Signal the thread to stop cooperatively
+        shouldStopThread.store(true);
+        
+        // Reset loading flag so we can try again
+        // The hung thread will be joined on next loadImageAsync call or in destructor
         isLoading.store(false);
-        if (backgroundThread.joinable()) {
-            backgroundThread.detach();
-        }
-        threadCount.store(0);
+        
+        // Don't reset threadCount - it will be decremented when thread finishes
     }
     
     // Check if we need to start loading a new image
