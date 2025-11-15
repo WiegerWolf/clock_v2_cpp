@@ -422,12 +422,13 @@ void BackgroundManager::update(int width, int height) {
 }
 
 void BackgroundManager::draw(SDL_Renderer* renderer) {
-    // Update textures if needed (only when image changes)
-    updateTextures(renderer);
     if (!renderer) {
         LOG_ERROR("draw() called with null renderer");
         return;
     }
+
+    // Update textures if needed (only when image changes)
+    updateTextures(renderer);
     
     // Render with null checks
     if (currentTexture) {
