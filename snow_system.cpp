@@ -1,4 +1,5 @@
 #include "snow_system.h"
+#include "logger.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -30,7 +31,7 @@ SDL_Texture* SnowSystem::createCircleTexture(int radius, Uint8 alpha) {
     );
     
     if (!surface) {
-        std::cerr << "Failed to create surface: " << SDL_GetError() << std::endl;
+        LOG_ERROR("Failed to create surface: %s", SDL_GetError());
         return nullptr;
     }
 
@@ -59,7 +60,7 @@ SDL_Texture* SnowSystem::createCircleTexture(int radius, Uint8 alpha) {
     if (texture) {
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     } else {
-        std::cerr << "Failed to create texture: " << SDL_GetError() << std::endl;
+        LOG_ERROR("Failed to create texture: %s", SDL_GetError());
     }
 
     return texture;
@@ -97,7 +98,7 @@ void SnowSystem::resetSnowflake(Snowflake& snow) {
 void SnowSystem::initialize(SDL_Renderer* r) {
     renderer = r;
     if (!renderer) {
-        std::cerr << "Invalid renderer provided" << std::endl;
+        LOG_ERROR("Invalid renderer provided");
         return;
     }
 
@@ -107,7 +108,7 @@ void SnowSystem::initialize(SDL_Renderer* r) {
     snowTexLarge = createCircleTexture(4, 240);
 
     if (!snowTexSmall || !snowTexMedium || !snowTexLarge) {
-        std::cerr << "Failed to create snowflake textures" << std::endl;
+        LOG_ERROR("Failed to create snowflake textures");
         return;
     }
 
@@ -118,7 +119,7 @@ void SnowSystem::initialize(SDL_Renderer* r) {
     }
 
     initialized = true;
-    std::cout << "Snow system initialized with " << numFlakes << " flakes" << std::endl;
+    LOG_INFO("Snow system initialized with %d flakes", numFlakes);
 }
 
 void SnowSystem::update() {

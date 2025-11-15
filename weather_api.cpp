@@ -2,6 +2,7 @@
 #include "weather_api.h"
 #include "constants.h"
 #include "config.h"
+#include "logger.h"
 #include <iostream>
 #include <ctime>
 #include <httplib.h>
@@ -61,7 +62,7 @@ WeatherData WeatherAPI::fetchWeatherFromAPI() {
     
     auto res = cli.Get(WEATHER_API_URL_PATH);
     if (!res) {
-        std::cerr << "HTTP connection failed" << std::endl;
+        LOG_ERROR("HTTP connection failed");
         return result;
     }
     
@@ -73,10 +74,10 @@ WeatherData WeatherAPI::fetchWeatherFromAPI() {
             result.weathercode = current["weathercode"].get<int>();
             result.windspeed = current["windspeed"].get<double>();
         } catch (const std::exception& e) {
-            std::cerr << "Error processing weather data: " << e.what() << std::endl;
+            LOG_ERROR("Error processing weather data: %s", e.what());
         }
     } else {
-        std::cerr << "HTTP weather request failed with status: " << res->status << std::endl;
+        LOG_ERROR("HTTP weather request failed with status: %d", res->status);
     }
     
     return result;
@@ -117,7 +118,7 @@ void WeatherAPI::updateLoop() {
             } else {
                 // Failed update
                 retryInterval = std::min(retryInterval * 2, MAX_RETRY_INTERVAL);
-                std::cerr << "Weather update failed, retrying in " << retryInterval << " seconds" << std::endl;
+                LOG_WARNING("Weather update failed, retrying in %d seconds", retryInterval);
 
                 // Wait for retry interval or until stopped
                 std::unique_lock<std::mutex> lock(dataMutex); // Use unique_lock for condition variable

@@ -8,6 +8,7 @@
 #include "config.h"
 #include "weather.h"
 #include "clothing_advice.h"
+#include "logger.h"
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_image.h>
 #include <iostream>
@@ -67,7 +68,7 @@ Clock::~Clock() {
 
 bool Clock::initialize() {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
+        LOG_CRITICAL("SDL_Init Error: %s", SDL_GetError());
         return false;
     }
 
@@ -75,13 +76,13 @@ bool Clock::initialize() {
     SDL_ShowCursor(SDL_DISABLE);
 
     if (IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG) == 0) {
-        std::cerr << "IMG_Init Error: " << IMG_GetError() << std::endl;
+        LOG_CRITICAL("IMG_Init Error: %s", IMG_GetError());
         SDL_Quit();
         return false;
     }
 
     if (TTF_Init() < 0) {
-        std::cerr << "TTF_Init Error: " << TTF_GetError() << std::endl;
+        LOG_CRITICAL("TTF_Init Error: %s", TTF_GetError());
         IMG_Quit();
         SDL_Quit();
         return false;
@@ -90,7 +91,7 @@ bool Clock::initialize() {
     window = SDL_CreateWindow("Digital Clock C++", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
                               SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     if (!window) {
-        std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
+        LOG_CRITICAL("SDL_CreateWindow Error: %s", SDL_GetError());
         TTF_Quit();
         IMG_Quit();
         SDL_Quit();
@@ -99,7 +100,7 @@ bool Clock::initialize() {
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) {
-        std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
+        LOG_CRITICAL("SDL_CreateRenderer Error: %s", SDL_GetError());
         SDL_DestroyWindow(window);
         TTF_Quit();
         IMG_Quit();

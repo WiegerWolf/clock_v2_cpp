@@ -70,3 +70,41 @@ WantedBy=multi-user.target
 sudo systemctl enable digital-clock.service
 sudo systemctl start digital-clock.service
 ```
+
+## Viewing Logs
+
+The application logs to stdout/stderr, which are automatically captured by systemd. Use `journalctl` to view logs:
+
+```bash
+# Follow live logs (like tail -f)
+sudo journalctl -u digital-clock.service -f
+
+# View last 100 lines
+sudo journalctl -u digital-clock.service -n 100
+
+# View logs with priority/colors
+sudo journalctl -u digital-clock.service -f --output=short-precise
+
+# Filter by log level (errors and above)
+sudo journalctl -u digital-clock.service -p err
+
+# View logs from specific time
+sudo journalctl -u digital-clock.service --since "1 hour ago"
+sudo journalctl -u digital-clock.service --since "2025-01-15 12:00:00"
+
+# Search for specific text
+sudo journalctl -u digital-clock.service | grep "Background"
+
+# View logs from today
+sudo journalctl -u digital-clock.service --since today
+
+# Export logs to file
+sudo journalctl -u digital-clock.service > clock_logs.txt
+```
+
+**Log Levels:**
+- `DEBUG` - Detailed debugging information
+- `INFO` - General informational messages
+- `WARNING` - Warning messages
+- `ERROR` - Error messages (output to stderr)
+- `CRITICAL` - Critical errors (output to stderr)

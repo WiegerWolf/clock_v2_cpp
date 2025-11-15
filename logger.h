@@ -2,7 +2,6 @@
 #define LOGGER_H
 
 #include <string>
-#include <fstream>
 #include <mutex>
 #include <cstdarg>
 
@@ -25,29 +24,19 @@ public:
     // Log memory usage from /proc/self/statm
     void logMemoryUsage();
 
-    // Flush log buffer to disk
-    void flush();
-
     // Prevent copying
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 
 private:
-    Logger();
-    ~Logger();
+    Logger() = default;
+    ~Logger() = default;
 
-    // Thread-safe file operations
+    // Thread-safe console operations
     std::mutex logMutex;
-    std::ofstream logFile;
-    std::string logPath;
-    static constexpr size_t MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
-    static constexpr int MAX_ROTATED_LOGS = 2;
 
     // Internal methods
-    void rotateIfNeeded();
-    size_t getFileSize() const;
     size_t getMemoryUsageKB();
-    std::string getCurrentTimestamp();
     std::string getLevelString(Level level);
     unsigned long getThreadId();
 };
