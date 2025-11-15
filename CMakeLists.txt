@@ -15,7 +15,8 @@ else()
 endif()
 
 # Enable Link Time Optimization
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+# Disabled due to GCC 12 ICE with cpp-httplib template instantiation
+# set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 # Option to provide Cerebras API Key at compile time
 option(CEREBRAS_API_KEY_DEFINE "Provide the Cerebras API Key" "")
