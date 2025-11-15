@@ -2,6 +2,7 @@
 #include "logger.h"
 #include <sstream>
 #include <type_traits>
+#include <string>
 
 // Circuit Breaker Implementation
 HTTPCircuitBreaker::HTTPCircuitBreaker(
@@ -137,11 +138,18 @@ HTTPClient::Response HTTPClient::get(const std::string& path, int timeoutSeconds
             auto res = client.Get(path.c_str());
             
             if (res) {
-                response.success = true;
                 response.statusCode = res->status;
                 response.body = res->body;
-                circuitBreaker.recordSuccess();
-                LOG_DEBUG("HTTP GET successful, status: %d", res->status);
+                const bool http_ok = res->status >= 200 && res->status < 300;
+                response.success = http_ok;
+                if (http_ok) {
+                    circuitBreaker.recordSuccess();
+                    LOG_DEBUG("HTTP GET successful, status: %d", res->status);
+                } else {
+                    response.error = "HTTP status " + std::to_string(res->status);
+                    circuitBreaker.recordFailure();
+                    LOG_ERROR("HTTP GET failed with status: %d", res->status);
+                }
             } else {
                 response.error = httplib::to_string(res.error());
                 circuitBreaker.recordFailure();
@@ -154,10 +162,16 @@ HTTPClient::Response HTTPClient::get(const std::string& path, int timeoutSeconds
             auto res = client.Get(path.c_str());
             
             if (res) {
-                response.success = true;
                 response.statusCode = res->status;
                 response.body = res->body;
-                circuitBreaker.recordSuccess();
+                const bool http_ok = res->status >= 200 && res->status < 300;
+                response.success = http_ok;
+                if (http_ok) {
+                    circuitBreaker.recordSuccess();
+                } else {
+                    response.error = "HTTP status " + std::to_string(res->status);
+                    circuitBreaker.recordFailure();
+                }
             } else {
                 response.error = httplib::to_string(res.error());
                 circuitBreaker.recordFailure();
@@ -198,11 +212,18 @@ HTTPClient::Response HTTPClient::post(
             auto res = client.Post(path.c_str(), headers, body, contentType.c_str());
             
             if (res) {
-                response.success = true;
                 response.statusCode = res->status;
                 response.body = res->body;
-                circuitBreaker.recordSuccess();
-                LOG_DEBUG("HTTP POST successful, status: %d", res->status);
+                const bool http_ok = res->status >= 200 && res->status < 300;
+                response.success = http_ok;
+                if (http_ok) {
+                    circuitBreaker.recordSuccess();
+                    LOG_DEBUG("HTTP POST successful, status: %d", res->status);
+                } else {
+                    response.error = "HTTP status " + std::to_string(res->status);
+                    circuitBreaker.recordFailure();
+                    LOG_ERROR("HTTP POST failed with status: %d", res->status);
+                }
             } else {
                 response.error = httplib::to_string(res.error());
                 circuitBreaker.recordFailure();
@@ -215,10 +236,16 @@ HTTPClient::Response HTTPClient::post(
             auto res = client.Post(path.c_str(), headers, body, contentType.c_str());
             
             if (res) {
-                response.success = true;
                 response.statusCode = res->status;
                 response.body = res->body;
-                circuitBreaker.recordSuccess();
+                const bool http_ok = res->status >= 200 && res->status < 300;
+                response.success = http_ok;
+                if (http_ok) {
+                    circuitBreaker.recordSuccess();
+                } else {
+                    response.error = "HTTP status " + std::to_string(res->status);
+                    circuitBreaker.recordFailure();
+                }
             } else {
                 response.error = httplib::to_string(res.error());
                 circuitBreaker.recordFailure();
