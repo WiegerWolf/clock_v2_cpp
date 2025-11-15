@@ -18,6 +18,13 @@ endif()
 # Disabled due to GCC 12 ICE with cpp-httplib template instantiation
 # set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+# Workaround for GCC 12 ARM ICE with cpp-httplib regex instantiation
+# Compile weather_api.cpp with reduced optimization to avoid the compiler bug
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+    set_source_files_properties(weather_api.cpp PROPERTIES 
+        COMPILE_FLAGS "-O2 -fno-tree-vrp")
+endif()
+
 # Option to provide Cerebras API Key at compile time
 option(CEREBRAS_API_KEY_DEFINE "Provide the Cerebras API Key" "")
 if(NOT CEREBRAS_API_KEY_DEFINE)
