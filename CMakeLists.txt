@@ -51,6 +51,8 @@ add_executable(${PROJECT_NAME}
     background_manager.cpp
     constants.cpp
     config.cpp
+    logger.cpp
+    http_client.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} 

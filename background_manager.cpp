@@ -1,6 +1,8 @@
 #include "background_manager.h"
 #include "config.h"
 #include "constants.h"
+#include "logger.h"
+#include "http_client.h"
 #include <iostream>
 #include <fstream>
 #include <ctime>
@@ -8,6 +10,7 @@
 #include <SDL2/SDL_image.h>
 #include <nlohmann/json.hpp>
 #include <thread>
+#include <chrono>
 
 using json = nlohmann::json;
 
@@ -28,48 +31,85 @@ std::string BackgroundManager::getError() const {
 }
 
 BackgroundManager::~BackgroundManager() {
-    // Ensure the background thread finishes before destruction
-    if (backgroundThread.joinable()) {
-        backgroundThread.join();
+    LOG_INFO("BackgroundManager destructor called");
+    
+    // Signal thread to stop (if checked inside worker)
+    shouldStopThread.store(true);
+    
+    // Wait for any texture updates to complete
+    int waitCount = 0;
+    while (textureUpdateInProgress.load() && waitCount++ < 50) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-
-    if (currentTexture) SDL_DestroyTexture(currentTexture);
-    if (overlayTexture) SDL_DestroyTexture(overlayTexture);
-    if (currentImage) SDL_FreeSurface(currentImage);
-    if (overlay) SDL_FreeSurface(overlay);
-    if (pendingImage) SDL_FreeSurface(pendingImage);
+    
+    // Join worker thread if it exists - simple and safe
+    if (backgroundThread.joinable()) {
+        LOG_DEBUG("Waiting for background thread to finish...");
+        backgroundThread.join();
+        LOG_DEBUG("Background thread joined successfully");
+    }
+    
+    // Clean up SDL resources (now safe - no thread accessing them)
+    LOG_DEBUG("Cleaning up SDL resources");
+    if (currentTexture) {
+        SDL_DestroyTexture(currentTexture);
+        currentTexture = nullptr;
+    }
+    if (overlayTexture) {
+        SDL_DestroyTexture(overlayTexture);
+        overlayTexture = nullptr;
+    }
+    if (currentImage) {
+        SDL_FreeSurface(currentImage);
+        currentImage = nullptr;
+    }
+    if (overlay) {
+        SDL_FreeSurface(overlay);
+        overlay = nullptr;
+    }
+    if (pendingImage) {
+        SDL_FreeSurface(pendingImage);
+        pendingImage = nullptr;
+    }
+    
+    LOG_INFO("BackgroundManager destroyed");
 }
 
 std::string BackgroundManager::fetchImageUrl() {
-    httplib::SSLClient cli(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT);
-    cli.set_follow_location(true);
-    cli.enable_server_certificate_verification(false);
+    HTTPClient client(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT, true);
     
-    auto res = cli.Get(BACKGROUND_API_URL_PATH);
-    if (!res) {
+    auto response = client.get(BACKGROUND_API_URL_PATH);
+    
+    if (!response.success) {
         std::lock_guard<std::mutex> lock(mutex);
-        error = "Failed to get response";
+        error = "Failed to fetch image URL: " + response.error;
+        LOG_ERROR("%s", error.c_str());
         return "";
     }
     
-    if (res->status == 200) {
-        try {
-            json data = json::parse(res->body);
-            return data[0]["fullUrl"].get<std::string>();
-        } catch (const json::parse_error& e) {
-            std::lock_guard<std::mutex> lock(mutex);
-            error = "JSON parse error: " + std::string(e.what());
-            return "";
-        } catch (const std::exception& e) {
-            std::lock_guard<std::mutex> lock(mutex);
-            error = "Error processing JSON: " + std::string(e.what());
-            return "";
-        }
+    if (response.statusCode != 200) {
+        std::lock_guard<std::mutex> lock(mutex);
+        error = "HTTP status: " + std::to_string(response.statusCode);
+        LOG_ERROR("Background API returned status %d", response.statusCode);
+        return "";
     }
     
-    std::lock_guard<std::mutex> lock(mutex);
-    error = "HTTP request failed: " + std::to_string(res->status);
-    return "";
+    try {
+        json data = json::parse(response.body);
+        std::string url = data[0]["fullUrl"].get<std::string>();
+        LOG_DEBUG("Fetched background image URL: %s", url.c_str());
+        return url;
+    } catch (const json::parse_error& e) {
+        std::lock_guard<std::mutex> lock(mutex);
+        error = "JSON parse error: " + std::string(e.what());
+        LOG_ERROR("%s", error.c_str());
+        return "";
+    } catch (const std::exception& e) {
+        std::lock_guard<std::mutex> lock(mutex);
+        error = "Error processing JSON: " + std::string(e.what());
+        LOG_ERROR("%s", error.c_str());
+        return "";
+    }
 }
 
 SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
@@ -86,22 +126,27 @@ SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
 }
 
 SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int height) {
+    LOG_DEBUG("loadImage() called for URL: %s", url.c_str());
+    
     std::string hostWithProto = url.substr(0, url.find("/", 8));
     std::string host = hostWithProto.substr(hostWithProto.find("://") + 3);
     std::string path = url.substr(url.find("/", 8));
     
     httplib::SSLClient cli(host);
     cli.set_follow_location(true);
-    cli.enable_server_certificate_verification(false);
     
+    // Set aggressive timeouts to prevent hangs
     cli.set_read_timeout(5, 0);
     cli.set_write_timeout(5, 0);
     cli.set_connection_timeout(5, 0);
+    
+    LOG_DEBUG("Fetching image from host: %s, path: %s", host.c_str(), path.c_str());
     
     auto res = cli.Get(path.c_str());
     if (!res) {
         std::lock_guard<std::mutex> lock(mutex);
         error = "Failed to get image response: " + std::string(httplib::to_string(res.error()));
+        LOG_ERROR("HTTP GET failed: %s", httplib::to_string(res.error()).c_str());
         return nullptr;
     }
     
@@ -157,75 +202,223 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
 }
 
 void BackgroundManager::loadImageAsync(const std::string& url, int width, int height) {
-    if (isLoading.load()) return;
-
-    if (backgroundThread.joinable()) {
-        backgroundThread.join();
+    // Skip if already loading
+    if (isLoading.load()) {
+        LOG_DEBUG("Background image load already in progress, skipping");
+        return;
     }
-
-    isLoading.store(true);
-    backgroundThread = std::thread([this, url, width, height]() {
-        SDL_Surface* newImage = loadImage(url, width, height);
-        if (newImage) {
-            std::lock_guard<std::mutex> lock(mutex);
-            pendingImage = newImage;
+    
+    // Check thread count limit
+    if (threadCount.load() >= MAX_THREADS) {
+        LOG_WARNING("Max background threads reached (%d), skipping image load", MAX_THREADS);
+        return;
+    }
+    
+    // CRITICAL: Join previous thread before starting a new one
+    // This ensures we maintain ownership and prevent use-after-free
+    if (backgroundThread.joinable()) {
+        LOG_DEBUG("Joining previous background thread before starting new one");
+        
+        // Signal the thread to stop if it's taking too long
+        time_t now = time(nullptr);
+        time_t lastStart = lastThreadStart.load();
+        if (lastStart > 0 && (now - lastStart) > THREAD_TIMEOUT) {
+            LOG_WARNING("Previous background thread running for %ld seconds, signaling stop", now - lastStart);
+            shouldStopThread.store(true);
         }
+        
+        // Always join - never detach
+        backgroundThread.join();
+        shouldStopThread.store(false); // Reset for next thread
+        LOG_DEBUG("Previous background thread joined successfully");
+    }
+    
+    LOG_INFO("Starting background image load from: %s", url.c_str());
+    time_t now = time(nullptr);
+    lastThreadStart.store(now);
+    threadCount.fetch_add(1);
+    isLoading.store(true);
+    
+    backgroundThread = std::thread([this, url, width, height]() {
+        LOG_DEBUG("Background thread started");
+        
+        // Check if we should stop before doing work
+        if (shouldStopThread.load()) {
+            LOG_DEBUG("Background thread cancelled before starting work");
+            isLoading.store(false);
+            threadCount.fetch_sub(1);
+            return;
+        }
+        
+        SDL_Surface* newImage = loadImage(url, width, height);
+        
+        // Check again after potentially long operation
+        if (shouldStopThread.load()) {
+            LOG_DEBUG("Background thread cancelled after loadImage");
+            if (newImage) {
+                SDL_FreeSurface(newImage);
+            }
+            isLoading.store(false);
+            threadCount.fetch_sub(1);
+            return;
+        }
+        
+        if (newImage) {
+            LOG_INFO("Successfully loaded background image (%dx%d)", newImage->w, newImage->h);
+            
+            // Critical section: set pending image with ready flag
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                
+                // Free any existing pending image that wasn't processed
+                if (pendingImage) {
+                    LOG_WARNING("Previous pendingImage was not processed, freeing it");
+                    SDL_FreeSurface(pendingImage);
+                }
+                
+                pendingImage = newImage;
+                pendingImageReady = true;  // Signal main thread to process it
+            }
+        } else {
+            LOG_ERROR("Failed to load background image from: %s", url.c_str());
+        }
+        
         isLoading.store(false);
+        threadCount.fetch_sub(1);
+        LOG_DEBUG("Background thread finished");
     });
 }
 
 void BackgroundManager::updateTextures(SDL_Renderer* renderer) {
-    std::lock_guard<std::mutex> lock(mutex);
+    // Prevent concurrent texture updates
+    if (textureUpdateInProgress.exchange(true)) {
+        return; // Another update already in progress
+    }
     
-    // Update main texture if we have a new image
-    if (pendingImage) {
-        if (currentImage) SDL_FreeSurface(currentImage);
-        if (currentTexture) SDL_DestroyTexture(currentTexture);
+    SDL_Surface* surfaceToProcess = nullptr;
+    SDL_Surface* oldSurface = nullptr;
+    
+    // Critical section: transfer ownership of pending surface
+    {
+        std::lock_guard<std::mutex> lock(mutex);
         
-        currentImage = pendingImage;
-        pendingImage = nullptr;
-        
-        // Create texture once
-        currentTexture = SDL_CreateTextureFromSurface(renderer, currentImage);
-        if (!currentTexture) {
-            error = "SDL_CreateTextureFromSurface failed: " + std::string(SDL_GetError());
+        if (pendingImageReady && pendingImage) {
+            LOG_DEBUG("Processing pending background image");
+            
+            // Transfer ownership
+            surfaceToProcess = pendingImage;
+            oldSurface = currentImage;
+            
+            // Clear pending state
+            pendingImage = nullptr;
+            pendingImageReady = false;
+            currentImage = surfaceToProcess;  // Update current immediately
+        }
+    } // Mutex released - background thread can now set new pendingImage
+    
+    // Now we own surfaceToProcess exclusively - safe to use for SDL operations
+    if (surfaceToProcess) {
+        // Validate surface before SDL operations
+        if (surfaceToProcess->w > 0 && surfaceToProcess->h > 0) {
+            LOG_INFO("Creating texture from surface (%dx%d)", 
+                     surfaceToProcess->w, surfaceToProcess->h);
+            
+            // Destroy old texture
+            if (currentTexture) {
+                SDL_DestroyTexture(currentTexture);
+                currentTexture = nullptr;
+            }
+            
+            // Create new texture (MAIN THREAD ONLY - SAFE)
+            SDL_Texture* newTexture = SDL_CreateTextureFromSurface(renderer, surfaceToProcess);
+            if (newTexture) {
+                currentTexture = newTexture;
+                LOG_DEBUG("Texture created successfully");
+                
+                // Update overlay texture as well
+                if (overlayTexture) {
+                    SDL_DestroyTexture(overlayTexture);
+                }
+                if (overlay) {
+                    overlayTexture = SDL_CreateTextureFromSurface(renderer, overlay);
+                    if (!overlayTexture) {
+                        LOG_ERROR("Failed to create overlay texture: %s", SDL_GetError());
+                    }
+                }
+            } else {
+                LOG_ERROR("SDL_CreateTextureFromSurface failed: %s", SDL_GetError());
+            }
+        } else {
+            LOG_ERROR("Invalid surface dimensions: %dx%d", 
+                     surfaceToProcess->w, surfaceToProcess->h);
         }
         
-        // Update overlay texture as well
-        if (overlayTexture) SDL_DestroyTexture(overlayTexture);
-        if (overlay) {
-            overlayTexture = SDL_CreateTextureFromSurface(renderer, overlay);
-            if (!overlayTexture) {
-                error = "SDL_CreateTextureFromSurface (overlay) failed: " + std::string(SDL_GetError());
+        // Free old surface if it exists
+        if (oldSurface) {
+            SDL_FreeSurface(oldSurface);
+            LOG_DEBUG("Freed old background surface");
+        }
+    }
+    
+    // Handle renderer changes (recreate textures if needed)
+    if (cachedRenderer != renderer) {
+        LOG_INFO("Renderer changed, recreating textures");
+        cachedRenderer = renderer;
+        
+        // Destroy old textures
+        if (currentTexture) {
+            SDL_DestroyTexture(currentTexture);
+            currentTexture = nullptr;
+        }
+        if (overlayTexture) {
+            SDL_DestroyTexture(overlayTexture);
+            overlayTexture = nullptr;
+        }
+        
+        // Recreate from surfaces if available
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (currentImage && currentImage->w > 0 && currentImage->h > 0) {
+                currentTexture = SDL_CreateTextureFromSurface(renderer, currentImage);
+                if (!currentTexture) {
+                    LOG_ERROR("Failed to recreate current texture: %s", SDL_GetError());
+                }
+            }
+            if (overlay && overlay->w > 0 && overlay->h > 0) {
+                overlayTexture = SDL_CreateTextureFromSurface(renderer, overlay);
+                if (!overlayTexture) {
+                    LOG_ERROR("Failed to recreate overlay texture: %s", SDL_GetError());
+                }
             }
         }
     }
     
-    // If renderer changed, recreate textures
-    if (cachedRenderer != renderer) {
-        cachedRenderer = renderer;
-        
-        if (currentTexture) SDL_DestroyTexture(currentTexture);
-        if (overlayTexture) SDL_DestroyTexture(overlayTexture);
-        
-        currentTexture = nullptr;
-        overlayTexture = nullptr;
-        
-        if (currentImage) {
-            currentTexture = SDL_CreateTextureFromSurface(renderer, currentImage);
-        }
-        if (overlay) {
-            overlayTexture = SDL_CreateTextureFromSurface(renderer, overlay);
-        }
-    }
+    // Reset the texture update flag
+    textureUpdateInProgress.store(false);
 }
 
 void BackgroundManager::update(int width, int height) {
     time_t currentTime;
     time(&currentTime);
     
+    // Check for hung thread - signal it to stop but don't detach
+    time_t lastStart = lastThreadStart.load();
+    if (isLoading.load() && lastStart > 0 && (currentTime - lastStart) > THREAD_TIMEOUT) {
+        LOG_ERROR("Background thread appears hung (running for %ld seconds), signaling stop", 
+                  currentTime - lastStart);
+        
+        // Signal the thread to stop cooperatively
+        shouldStopThread.store(true);
+        
+        // Reset loading flag so we can try again
+        // The hung thread will be joined on next loadImageAsync call or in destructor
+        isLoading.store(false);
+        
+        // Don't reset threadCount - it will be decremented when thread finishes
+    }
+    
     // Check if we need to start loading a new image
-    if (!isLoading && (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
+    if (!isLoading.load() && (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
         std::string imageUrl = fetchImageUrl();
         if (!imageUrl.empty()) {
             loadImageAsync(imageUrl, width, height);
@@ -235,14 +428,24 @@ void BackgroundManager::update(int width, int height) {
 }
 
 void BackgroundManager::draw(SDL_Renderer* renderer) {
+    if (!renderer) {
+        LOG_ERROR("draw() called with null renderer");
+        return;
+    }
+
     // Update textures if needed (only when image changes)
     updateTextures(renderer);
     
-    // Just render the cached textures
+    // Render with null checks
     if (currentTexture) {
-        SDL_RenderCopy(renderer, currentTexture, NULL, NULL);
+        if (SDL_RenderCopy(renderer, currentTexture, NULL, NULL) != 0) {
+            LOG_ERROR("Failed to render background texture: %s", SDL_GetError());
+        }
     }
+    
     if (overlayTexture) {
-        SDL_RenderCopy(renderer, overlayTexture, NULL, NULL);
+        if (SDL_RenderCopy(renderer, overlayTexture, NULL, NULL) != 0) {
+            LOG_ERROR("Failed to render overlay texture: %s", SDL_GetError());
+        }
     }
 }
