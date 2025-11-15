@@ -412,7 +412,7 @@ void BackgroundManager::update(int width, int height) {
     }
     
     // Check if we need to start loading a new image
-    if (!isLoading && (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
+    if (!isLoading.load() && (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
         std::string imageUrl = fetchImageUrl();
         if (!imageUrl.empty()) {
             loadImageAsync(imageUrl, width, height);
