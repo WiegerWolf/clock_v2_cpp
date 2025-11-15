@@ -226,10 +226,10 @@ void BackgroundManager::loadImageAsync(const std::string& url, int width, int he
         }
     }
     
-    // Join previous thread if it finished
+    // Detach previous thread to avoid blocking (fire-and-forget pattern)
     if (backgroundThread.joinable()) {
-        // Try to join with zero timeout (non-blocking check)
-        backgroundThread.detach(); // Always detach to avoid blocking
+        LOG_DEBUG("Detaching previous background thread before starting new one");
+        backgroundThread.detach();
     }
     
     LOG_INFO("Starting background image load from: %s", url.c_str());
@@ -238,9 +238,28 @@ void BackgroundManager::loadImageAsync(const std::string& url, int width, int he
     isLoading.store(true);
     
     backgroundThread = std::thread([this, url, width, height]() {
-        LOG_DEBUG("Background thread started, ThreadID: %ld", std::this_thread::get_id());
+        LOG_DEBUG("Background thread started");
+        
+        // Check if we should stop before doing work
+        if (shouldStopThread.load()) {
+            LOG_DEBUG("Background thread cancelled before starting work");
+            isLoading.store(false);
+            threadCount.fetch_sub(1);
+            return;
+        }
         
         SDL_Surface* newImage = loadImage(url, width, height);
+        
+        // Check again after potentially long operation
+        if (shouldStopThread.load()) {
+            LOG_DEBUG("Background thread cancelled after loadImage");
+            if (newImage) {
+                SDL_FreeSurface(newImage);
+            }
+            isLoading.store(false);
+            threadCount.fetch_sub(1);
+            return;
+        }
         
         if (newImage) {
             LOG_INFO("Successfully loaded background image (%dx%d)", newImage->w, newImage->h);
@@ -264,7 +283,7 @@ void BackgroundManager::loadImageAsync(const std::string& url, int width, int he
         
         isLoading.store(false);
         threadCount.fetch_sub(1);
-        LOG_DEBUG("Background thread finished, ThreadID: %ld", std::this_thread::get_id());
+        LOG_DEBUG("Background thread finished");
     });
 }
 
