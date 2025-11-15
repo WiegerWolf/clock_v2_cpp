@@ -1,4 +1,5 @@
 #include "display.h"
+#include "logger.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -33,7 +34,7 @@ Display::Display(SDL_Renderer* renderer, int screenWidth, int screenHeight)
     fontExtraSmall = makeFontPtr(loadFont(FONT_PATH, std::max(1, largeFontSize / 12)));
 
     if (!fontLarge || !fontSmall || !fontExtraSmall) {
-        std::cerr << "Warning: Failed to load one or more fonts" << std::endl;
+        LOG_WARNING("Failed to load one or more fonts");
     }
 }
 
@@ -47,8 +48,7 @@ TTF_Font* Display::loadFont(const char* path, int size) {
     
     TTF_Font* font = TTF_OpenFont(path, size);
     if (!font) {
-        std::cerr << "Failed to load font " << path << " size " << size
-                  << ": " << TTF_GetError() << std::endl;
+        LOG_ERROR("Failed to load font %s size %d: %s", path, size, TTF_GetError());
     }
     return font;
 }
@@ -58,8 +58,8 @@ int Display::calculateLargeFontSize() {
     int targetHeight = static_cast<int>(screenHeight * 0.8);
     int maxWidth = static_cast<int>(screenWidth * 0.9);
 
-    std::cout << "Screen size: " << screenWidth << "x" << screenHeight << std::endl;
-    std::cout << "Target height: " << targetHeight << ", max width: " << maxWidth << std::endl;
+    LOG_DEBUG("Screen size: %dx%d", screenWidth, screenHeight);
+    LOG_DEBUG("Target height: %d, max width: %d", targetHeight, maxWidth);
 
     // Use the original linear search approach
     int testSize = 100;
@@ -69,8 +69,7 @@ int Display::calculateLargeFontSize() {
         TTF_Font* testFont = TTF_OpenFont(FONT_PATH, testSize);
 
         if (!testFont) {
-            std::cerr << "Failed to load font " << FONT_PATH << " at size " << testSize
-                      << ": " << TTF_GetError() << std::endl;
+            LOG_ERROR("Failed to load font %s at size %d: %s", FONT_PATH, testSize, TTF_GetError());
             break;
         }
 
@@ -80,7 +79,7 @@ int Display::calculateLargeFontSize() {
 
         if (textHeight >= targetHeight || textWidth >= maxWidth) {
             int finalSize = std::max(10, testSize - 10);
-            std::cout << "Final large font size: " << finalSize << std::endl;
+            LOG_DEBUG("Final large font size: %d", finalSize);
             return finalSize;
         }
 
@@ -88,7 +87,7 @@ int Display::calculateLargeFontSize() {
         testSize += 10;
     }
 
-    std::cout << "Final large font size (fallback): " << lastGoodSize << std::endl;
+    LOG_DEBUG("Final large font size (fallback): %d", lastGoodSize);
     return lastGoodSize;
 }
 
@@ -122,13 +121,13 @@ SDL_Texture* Display::createTextTexture(const std::string& text, TTF_Font* font,
                                         SDL_Color color, int& outWidth, int& outHeight) {
     SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
     if (!surface) {
-        std::cerr << "TTF_RenderUTF8_Blended failed: " << TTF_GetError() << std::endl;
+        LOG_ERROR("TTF_RenderUTF8_Blended failed: %s", TTF_GetError());
         return nullptr;
     }
 
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
     if (!texture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed: " << SDL_GetError() << std::endl;
+        LOG_ERROR("SDL_CreateTextureFromSurface failed: %s", SDL_GetError());
         SDL_FreeSurface(surface);
         return nullptr;
     }

@@ -3,6 +3,7 @@
 #include "config.h"
 #include "constants.h" // Include constants for API details
 #include "weather.h"
+#include "logger.h"
 #include <string>
 #include <sstream>
 #include <httplib.h>
@@ -31,7 +32,7 @@ std::string getBasicAdvice(double temperature) {
 std::string getClothingAdvice(double temperature, int weathercode, double windspeed, const char* language) {
 // API Key is now read directly from constants.h/cpp via CEREBRAS_API_KEY
 if (!CEREBRAS_API_KEY || std::string(CEREBRAS_API_KEY).empty()) {
-    std::cerr << "Cerebras API Key is not configured. Falling back to basic advice." << std::endl;
+    LOG_WARNING("Cerebras API Key is not configured. Falling back to basic advice.");
     return getBasicAdvice(temperature);
 }
 
@@ -87,7 +88,7 @@ try {
                 // Check for Cerebras specific error structure if needed, or general structure
                 if (j.contains("error")) {
                     std::string errorMsg = j["error"].dump();
-                    std::cerr << "Cerebras API Error: " << errorMsg << std::endl;
+                    LOG_ERROR("Cerebras API Error: %s", errorMsg.c_str());
                     return getBasicAdvice(temperature);
                 }
                 // Add proper validation before accessing nested JSON fields
@@ -102,23 +103,23 @@ try {
                         }
                     }
                 }
-                std::cerr << "Invalid or empty response from Cerebras API" << std::endl;
+                LOG_ERROR("Invalid or empty response from Cerebras API");
                 return getBasicAdvice(temperature);
             } catch (const nlohmann::json::parse_error &e) {
-                std::cerr << "Error processing Cerebras JSON response: " << e.what() << std::endl;
+                LOG_ERROR("Error processing Cerebras JSON response: %s", e.what());
                 return getBasicAdvice(temperature);
             } catch (const std::exception &e) {
-                std::cerr << "Error extracting content from response: " << e.what() << std::endl;
+                LOG_ERROR("Error extracting content from response: %s", e.what());
                 return getBasicAdvice(temperature);
             }
         }
     } else {
         auto err = res.error();
-        std::cerr << "HTTP request failed: " << httplib::to_string(err) << std::endl;
+        LOG_ERROR("HTTP request failed: %s", httplib::to_string(err).c_str());
         return getBasicAdvice(temperature);
     }
 } catch (const std::exception &e) {
-    std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
+    LOG_ERROR("An unexpected error occurred: %s", e.what());
     return getBasicAdvice(temperature);
 }
 
