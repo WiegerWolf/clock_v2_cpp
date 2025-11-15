@@ -99,8 +99,8 @@ std::string HTTPCircuitBreaker::getStateString() const {
 }
 
 // HTTP Client Implementation
-HTTPClient::HTTPClient(const std::string& host, int port, bool useSSL)
-    : host(host), port(port), useSSL(useSSL), circuitBreaker(3, 2, 60)
+HTTPClient::HTTPClient(const std::string& host, int port, bool useSSL, bool verifySSL)
+    : host(host), port(port), useSSL(useSSL), verifySSL(verifySSL), circuitBreaker(3, 2, 60)
 {
     LOG_INFO("HTTPClient created for %s://%s:%d", useSSL ? "https" : "http", host.c_str(), port);
 }
@@ -113,7 +113,7 @@ void HTTPClient::configureClient(ClientType& client, int timeoutSeconds) {
     client.set_follow_location(true);
     
     if constexpr (std::is_same_v<ClientType, httplib::SSLClient>) {
-        client.enable_server_certificate_verification(false);
+        client.enable_server_certificate_verification(verifySSL);
     }
 }
 

@@ -52,7 +52,7 @@ public:
         std::string error;
     };
     
-    HTTPClient(const std::string& host, int port = 443, bool useSSL = true);
+    HTTPClient(const std::string& host, int port = 443, bool useSSL = true, bool verifySSL = true);
     
     // GET request with circuit breaker protection
     Response get(const std::string& path, int timeoutSeconds = 10);
@@ -72,6 +72,7 @@ private:
     std::string host;
     int port;
     bool useSSL;
+    bool verifySSL;
     HTTPCircuitBreaker circuitBreaker;
     
     // Helper to configure client with timeouts

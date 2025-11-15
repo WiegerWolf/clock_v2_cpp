@@ -134,7 +134,6 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
     
     httplib::SSLClient cli(host);
     cli.set_follow_location(true);
-    cli.enable_server_certificate_verification(false);
     
     // Set aggressive timeouts to prevent hangs
     cli.set_read_timeout(5, 0);
