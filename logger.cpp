@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <thread>
 #include <fstream>
+#include <functional>
 
 Logger::Logger() : logPath("/tmp/clock_debug.log") {
     // Open log file in append mode
@@ -186,7 +187,5 @@ std::string Logger::getLevelString(Level level) {
 }
 
 unsigned long Logger::getThreadId() {
-    std::ostringstream oss;
-    oss << std::this_thread::get_id();
-    return std::stoull(oss.str());
+    return std::hash<std::thread::id>{}(std::this_thread::get_id());
 }
