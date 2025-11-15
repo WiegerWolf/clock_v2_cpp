@@ -1,5 +1,7 @@
 #include "logger.h"
 #include <iostream>
+#include <cstdarg>
+#include <cstdio>
 #include <ctime>
 #include <cstring>
 #include <chrono>
