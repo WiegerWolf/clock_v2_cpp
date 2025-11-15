@@ -33,7 +33,7 @@ std::string BackgroundManager::getError() const {
 BackgroundManager::~BackgroundManager() {
     LOG_INFO("BackgroundManager destructor called");
     
-    // Signal thread to stop
+    // Signal thread to stop (if checked inside worker)
     shouldStopThread.store(true);
     
     // Wait for any texture updates to complete
@@ -42,35 +42,35 @@ BackgroundManager::~BackgroundManager() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
-    // Give thread 2 seconds to finish gracefully
+    // Join worker thread if it exists - simple and safe
     if (backgroundThread.joinable()) {
         LOG_DEBUG("Waiting for background thread to finish...");
-        
-        // Try to join with timeout
-        std::thread waiter([this]() {
-            if (backgroundThread.joinable()) {
-                backgroundThread.join();
-            }
-        });
-        waiter.detach();
-        
-        // Wait maximum 2 seconds
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        
-        // Force detach if still running
-        if (backgroundThread.joinable()) {
-            LOG_WARNING("Background thread did not finish in time, detaching forcefully");
-            backgroundThread.detach();
-        }
+        backgroundThread.join();
+        LOG_DEBUG("Background thread joined successfully");
     }
     
     // Clean up SDL resources (now safe - no thread accessing them)
     LOG_DEBUG("Cleaning up SDL resources");
-    if (currentTexture) SDL_DestroyTexture(currentTexture);
-    if (overlayTexture) SDL_DestroyTexture(overlayTexture);
-    if (currentImage) SDL_FreeSurface(currentImage);
-    if (overlay) SDL_FreeSurface(overlay);
-    if (pendingImage) SDL_FreeSurface(pendingImage);
+    if (currentTexture) {
+        SDL_DestroyTexture(currentTexture);
+        currentTexture = nullptr;
+    }
+    if (overlayTexture) {
+        SDL_DestroyTexture(overlayTexture);
+        overlayTexture = nullptr;
+    }
+    if (currentImage) {
+        SDL_FreeSurface(currentImage);
+        currentImage = nullptr;
+    }
+    if (overlay) {
+        SDL_FreeSurface(overlay);
+        overlay = nullptr;
+    }
+    if (pendingImage) {
+        SDL_FreeSurface(pendingImage);
+        pendingImage = nullptr;
+    }
     
     LOG_INFO("BackgroundManager destroyed");
 }
