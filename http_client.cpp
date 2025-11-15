@@ -1,6 +1,7 @@
 #include "http_client.h"
 #include "logger.h"
 #include <sstream>
+#include <type_traits>
 
 // Circuit Breaker Implementation
 HTTPCircuitBreaker::HTTPCircuitBreaker(
