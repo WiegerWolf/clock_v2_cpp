@@ -7,6 +7,9 @@
 #include <thread>
 #include <atomic>
 #include <ctime>
+#include <memory>
+
+class HTTPClient;
 
 class BackgroundManager {
 public:
@@ -32,10 +35,16 @@ private:
     SDL_Renderer* cachedRenderer;
     
     time_t lastUpdate;
+    time_t lastFailedAttempt;
+    int consecutiveFailures;
     std::string error;
     std::atomic<bool> isLoading{false};
+    std::atomic<bool> isFetching{false};
     mutable std::mutex mutex;
+    mutable std::mutex httpClientMutex;  // Separate mutex for HTTP client access
     std::thread backgroundThread;
+    std::thread fetchThread;
+    std::unique_ptr<HTTPClient> httpClient;  // Shared HTTPClient for circuit breaker persistence
     
     // NEW: Thread management
     std::atomic<bool> shouldStopThread{false};
@@ -47,6 +56,7 @@ private:
     static constexpr int THREAD_TIMEOUT = 60; // seconds
 
     std::string fetchImageUrl();
+    void fetchImageUrlAsync(int width, int height);
     SDL_Surface* loadImage(const std::string& url, int width, int height);
     SDL_Surface* createDarkeningOverlay(int width, int height);
     void loadImageAsync(const std::string& url, int width, int height);

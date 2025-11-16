@@ -16,6 +16,12 @@ extern const int BACKGROUND_API_URL_PORT;
 extern const char* BACKGROUND_API_URL_PATH;
 extern const int BACKGROUND_UPDATE_INTERVAL;
 extern const double BACKGROUND_DARKNESS;
+
+// Fallback background color (used when no image is available)
+extern const int FALLBACK_BG_RED;
+extern const int FALLBACK_BG_GREEN;
+extern const int FALLBACK_BG_BLUE;
+
 extern const char* WEATHER_API_URL_HOST;
 extern const int WEATHER_API_URL_PORT;
 extern const char* WEATHER_API_URL_PATH;

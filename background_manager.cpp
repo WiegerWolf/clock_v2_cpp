@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <chrono>
+#include <algorithm>
 
 using json = nlohmann::json;
 
@@ -22,8 +23,13 @@ BackgroundManager::BackgroundManager()
     , overlayTexture(nullptr)
     , cachedRenderer(nullptr)
     , lastUpdate(0)
+    , lastFailedAttempt(0)
+    , consecutiveFailures(0)
     , error("")
-{}
+    , httpClient(std::make_unique<HTTPClient>(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT, true))
+{
+    LOG_INFO("BackgroundManager initialized with shared HTTPClient instance");
+}
 
 std::string BackgroundManager::getError() const {
     std::lock_guard<std::mutex> lock(mutex);
@@ -42,11 +48,24 @@ BackgroundManager::~BackgroundManager() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
+    // Join fetch thread if it exists
+    if (fetchThread.joinable()) {
+        LOG_DEBUG("Waiting for fetch thread to finish...");
+        fetchThread.join();
+        LOG_DEBUG("Fetch thread joined successfully");
+    }
+    
     // Join worker thread if it exists - simple and safe
     if (backgroundThread.joinable()) {
         LOG_DEBUG("Waiting for background thread to finish...");
         backgroundThread.join();
         LOG_DEBUG("Background thread joined successfully");
+    }
+    
+    // Clean up HTTP client
+    if (httpClient) {
+        LOG_DEBUG("Cleaning up shared HTTPClient instance");
+        httpClient.reset();
     }
     
     // Clean up SDL resources (now safe - no thread accessing them)
@@ -76,9 +95,10 @@ BackgroundManager::~BackgroundManager() {
 }
 
 std::string BackgroundManager::fetchImageUrl() {
-    HTTPClient client(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT, true);
+    // Use shared httpClient with mutex protection for thread safety
+    std::lock_guard<std::mutex> clientLock(httpClientMutex);
     
-    auto response = client.get(BACKGROUND_API_URL_PATH);
+    auto response = httpClient->get(BACKGROUND_API_URL_PATH);
     
     if (!response.success) {
         std::lock_guard<std::mutex> lock(mutex);
@@ -110,6 +130,71 @@ std::string BackgroundManager::fetchImageUrl() {
         LOG_ERROR("%s", error.c_str());
         return "";
     }
+}
+
+void BackgroundManager::fetchImageUrlAsync(int width, int height) {
+    // Skip if already fetching
+    if (isFetching.load()) {
+        LOG_DEBUG("URL fetch already in progress, skipping");
+        return;
+    }
+    
+    // Join previous fetch thread if it exists
+    if (fetchThread.joinable()) {
+        LOG_DEBUG("Joining previous fetch thread before starting new one");
+        fetchThread.join();
+        LOG_DEBUG("Previous fetch thread joined successfully");
+    }
+    
+    LOG_INFO("Starting asynchronous URL fetch");
+    isFetching.store(true);
+    
+    fetchThread = std::thread([this, width, height]() {
+        LOG_DEBUG("Fetch thread started");
+        
+        // Check if we should stop
+        if (shouldStopThread.load()) {
+            LOG_DEBUG("Fetch thread cancelled before starting work");
+            isFetching.store(false);
+            return;
+        }
+        
+        // Perform the blocking HTTP request on this background thread
+        std::string imageUrl = fetchImageUrl();
+        
+        // Check again after potentially long operation
+        if (shouldStopThread.load()) {
+            LOG_DEBUG("Fetch thread cancelled after fetchImageUrl");
+            isFetching.store(false);
+            return;
+        }
+        
+        if (!imageUrl.empty()) {
+            LOG_INFO("Successfully fetched image URL, starting image load");
+            // Trigger async image load with fetched URL
+            loadImageAsync(imageUrl, width, height);
+            
+            // Reset failure counter on successful fetch
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                consecutiveFailures = 0;
+            }
+        } else {
+            LOG_ERROR("Failed to fetch image URL");
+            // Track failure for backoff
+            time_t now = time(nullptr);
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                consecutiveFailures++;
+                lastFailedAttempt = now;
+            }
+            LOG_WARNING("Background fetch failed (attempt %d), will retry with backoff", 
+                       consecutiveFailures);
+        }
+        
+        isFetching.store(false);
+        LOG_DEBUG("Fetch thread finished");
+    });
 }
 
 SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
@@ -418,12 +503,24 @@ void BackgroundManager::update(int width, int height) {
     }
     
     // Check if we need to start loading a new image
-    if (!isLoading.load() && (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
-        std::string imageUrl = fetchImageUrl();
-        if (!imageUrl.empty()) {
-            loadImageAsync(imageUrl, width, height);
-            lastUpdate = currentTime;
+    // CRITICAL: Also check !isFetching to prevent blocking the main thread
+    if (!isLoading.load() && !isFetching.load() && 
+        (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
+        
+        // Calculate backoff delay based on consecutive failures (cap at 10 minutes)
+        int backoffDelay = std::min(30 * consecutiveFailures, 600);
+        
+        // Check if enough time has passed since last failed attempt
+        if (consecutiveFailures > 0 && difftime(currentTime, lastFailedAttempt) < backoffDelay) {
+            // Still in backoff period, skip this attempt
+            return;
         }
+        
+        // Update lastUpdate BEFORE attempting fetch to prevent infinite retries
+        lastUpdate = currentTime;
+        
+        // Start async fetch - this returns immediately without blocking
+        fetchImageUrlAsync(width, height);
     }
 }
 
@@ -436,16 +533,30 @@ void BackgroundManager::draw(SDL_Renderer* renderer) {
     // Update textures if needed (only when image changes)
     updateTextures(renderer);
     
-    // Render with null checks
+    // Always render something - either the image or fallback color
     if (currentTexture) {
+        // Render the background image
         if (SDL_RenderCopy(renderer, currentTexture, NULL, NULL) != 0) {
             LOG_ERROR("Failed to render background texture: %s", SDL_GetError());
         }
-    }
-    
-    if (overlayTexture) {
-        if (SDL_RenderCopy(renderer, overlayTexture, NULL, NULL) != 0) {
-            LOG_ERROR("Failed to render overlay texture: %s", SDL_GetError());
+        
+        // Render the darkening overlay
+        if (overlayTexture) {
+            if (SDL_RenderCopy(renderer, overlayTexture, NULL, NULL) != 0) {
+                LOG_ERROR("Failed to render overlay texture: %s", SDL_GetError());
+            }
+        }
+    } else {
+        // Fallback: render solid color background
+        // This ensures the app remains functional when images are unavailable
+        SDL_SetRenderDrawColor(renderer, FALLBACK_BG_RED, FALLBACK_BG_GREEN, FALLBACK_BG_BLUE, 255);
+        SDL_RenderClear(renderer);
+        
+        // Log only once per startup or when transitioning to fallback
+        static bool fallbackLogged = false;
+        if (!fallbackLogged) {
+            LOG_DEBUG("Using fallback background color (no image available yet)");
+            fallbackLogged = true;
         }
     }
 }
