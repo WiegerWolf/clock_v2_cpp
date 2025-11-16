@@ -3,6 +3,30 @@ include(FetchContent)
 
 project(digital_clock)
 
+# Get Git commit hash (short 7-character version)
+execute_process(
+    COMMAND git rev-parse --short=7 HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+
+# Fallback if not in Git repo
+if(NOT GIT_COMMIT_HASH)
+    set(GIT_COMMIT_HASH "unknown")
+endif()
+
+# Get build timestamp
+string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S UTC" UTC)
+
+# Generate version header
+configure_file(
+    ${CMAKE_SOURCE_DIR}/version.h.in
+    ${CMAKE_BINARY_DIR}/version.h
+    @ONLY
+)
+
 # Check if we're building for Raspberry Pi
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
     # Raspberry Pi specific optimizations
@@ -62,6 +86,9 @@ add_executable(${PROJECT_NAME}
     logger.cpp
     http_client.cpp
 )
+
+# Include build directory for generated headers
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR})
 
 target_link_libraries(${PROJECT_NAME} 
     SDL2::SDL2 

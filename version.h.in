@@ -1,0 +1,4 @@
+#pragma once
+
+#define VERSION_GIT_HASH "@GIT_COMMIT_HASH@"
+#define VERSION_BUILD_TIME "@BUILD_TIMESTAMP@"

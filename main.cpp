@@ -2,9 +2,11 @@
 #include "clock.h"
 #include "logger.h"
 #include <unistd.h>
+#include "version.h"
 
 int main() {
     LOG_INFO("Application starting...");
+    LOG_INFO("Version: %s (built %s)", VERSION_GIT_HASH, VERSION_BUILD_TIME);
     LOG_INFO("Process ID: %d", getpid());
     Logger::instance().logMemoryUsage();
     
