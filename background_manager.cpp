@@ -177,7 +177,7 @@ void BackgroundManager::fetchImageUrlAsync(int width, int height) {
             // Reset failure counter on successful fetch
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                consecutiveFailures = 0;
+                consecutiveFailures.store(0);
             }
         } else {
             LOG_ERROR("Failed to fetch image URL");
@@ -185,11 +185,11 @@ void BackgroundManager::fetchImageUrlAsync(int width, int height) {
             time_t now = time(nullptr);
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                consecutiveFailures++;
-                lastFailedAttempt = now;
+                consecutiveFailures.fetch_add(1);
+                lastFailedAttempt.store(now);
             }
             LOG_WARNING("Background fetch failed (attempt %d), will retry with backoff", 
-                       consecutiveFailures);
+                       consecutiveFailures.load());
         }
         
         isFetching.store(false);
@@ -507,11 +507,15 @@ void BackgroundManager::update(int width, int height) {
     if (!isLoading.load() && !isFetching.load() && 
         (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
         
+        // Take a consistent snapshot of the backoff state
+        const int failures = consecutiveFailures.load();
+        const time_t lastFailureTime = lastFailedAttempt.load();
+        
         // Calculate backoff delay based on consecutive failures (cap at 10 minutes)
-        int backoffDelay = std::min(30 * consecutiveFailures, 600);
+        int backoffDelay = std::min(30 * failures, 600);
         
         // Check if enough time has passed since last failed attempt
-        if (consecutiveFailures > 0 && difftime(currentTime, lastFailedAttempt) < backoffDelay) {
+        if (failures > 0 && difftime(currentTime, lastFailureTime) < backoffDelay) {
             // Still in backoff period, skip this attempt
             return;
         }

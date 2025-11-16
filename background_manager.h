@@ -35,8 +35,8 @@ private:
     SDL_Renderer* cachedRenderer;
     
     time_t lastUpdate;
-    time_t lastFailedAttempt;
-    int consecutiveFailures;
+    std::atomic<time_t> lastFailedAttempt;
+    std::atomic<int> consecutiveFailures;
     std::string error;
     std::atomic<bool> isLoading{false};
     std::atomic<bool> isFetching{false};
