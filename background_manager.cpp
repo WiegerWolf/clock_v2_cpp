@@ -23,8 +23,6 @@ BackgroundManager::BackgroundManager()
     , overlayTexture(nullptr)
     , cachedRenderer(nullptr)
     , lastUpdate(0)
-    , lastFailedAttempt(0)
-    , consecutiveFailures(0)
     , error("")
     , httpClient(std::make_unique<HTTPClient>(BACKGROUND_API_URL_HOST, BACKGROUND_API_URL_PORT, true))
 {
