@@ -59,6 +59,13 @@ void Logger::logMemoryUsage() {
     std::cout << logEntry.str() << std::flush;
 }
 
+std::string Logger::getFormattedMemoryUsage() {
+    size_t memoryKB = getMemoryUsageKB();
+    std::ostringstream oss;
+    oss << memoryKB << " KB (" << (memoryKB / 1024.0) << " MB)";
+    return oss.str();
+}
+
 size_t Logger::getMemoryUsageKB() {
     std::ifstream statm("/proc/self/statm");
     if (!statm.is_open()) {

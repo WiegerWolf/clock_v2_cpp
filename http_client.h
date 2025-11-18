@@ -55,13 +55,13 @@ public:
     HTTPClient(const std::string& host, int port = 443, bool useSSL = true, bool verifySSL = true);
     
     // GET request with circuit breaker protection
-    Response get(const std::string& path, int timeoutSeconds = 10);
+    Response get(const std::string& path, int timeoutSeconds = 5);
     
     // POST request with circuit breaker protection
     Response post(const std::string& path, const std::string& body,
                  const std::string& contentType = "application/json",
                  const httplib::Headers& headers = {},
-                 int timeoutSeconds = 10);
+                 int timeoutSeconds = 5);
     
     // Get circuit breaker state for monitoring
     HTTPCircuitBreaker::State getCircuitState() const {
