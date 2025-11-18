@@ -126,10 +126,19 @@ void Clock::run() {
         return;
     }
 
+    auto lastHeartbeat = std::chrono::steady_clock::now();
+    
     while (running) {
         handleEvents();
         update();
         draw();
+        
+        // Watchdog heartbeat
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastHeartbeat).count() >= 60) {
+            LOG_INFO("Heartbeat - Main loop running. RSS: %s", Logger::instance().getFormattedMemoryUsage().c_str());
+            lastHeartbeat = now;
+        }
     }
 }
 

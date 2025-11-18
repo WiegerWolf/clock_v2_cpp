@@ -39,27 +39,22 @@ private:
     std::atomic<int> consecutiveFailures{0};
     std::string error;
     std::atomic<bool> isLoading{false};
-    std::atomic<bool> isFetching{false};
     mutable std::mutex mutex;
     mutable std::mutex httpClientMutex;  // Separate mutex for HTTP client access
-    std::thread backgroundThread;
-    std::thread fetchThread;
-    std::unique_ptr<HTTPClient> httpClient;  // Shared HTTPClient for circuit breaker persistence
     
-    // NEW: Thread management
+    // Simplified threading: Single worker thread
+    std::thread workerThread;
+    std::unique_ptr<HTTPClient> httpClient;
+    
+    // Thread management
     std::atomic<bool> shouldStopThread{false};
-    std::atomic<int> threadCount{0};
-    static constexpr int MAX_THREADS = 1;
-    
-    // NEW: Timeout tracking
     std::atomic<time_t> lastThreadStart{0};
     static constexpr int THREAD_TIMEOUT = 60; // seconds
 
     std::string fetchImageUrl();
-    void fetchImageUrlAsync(int width, int height);
     SDL_Surface* loadImage(const std::string& url, int width, int height);
     SDL_Surface* createDarkeningOverlay(int width, int height);
-    void loadImageAsync(const std::string& url, int width, int height);
+    void startBackgroundUpdate(int width, int height);
     void updateTextures(SDL_Renderer* renderer);
 };
 

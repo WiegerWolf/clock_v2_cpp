@@ -37,7 +37,7 @@ std::string BackgroundManager::getError() const {
 BackgroundManager::~BackgroundManager() {
     LOG_INFO("BackgroundManager destructor called");
     
-    // Signal thread to stop (if checked inside worker)
+    // Signal thread to stop
     shouldStopThread.store(true);
     
     // Wait for any texture updates to complete
@@ -46,18 +46,14 @@ BackgroundManager::~BackgroundManager() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     
-    // Join fetch thread if it exists
-    if (fetchThread.joinable()) {
-        LOG_DEBUG("Waiting for fetch thread to finish...");
-        fetchThread.join();
-        LOG_DEBUG("Fetch thread joined successfully");
-    }
-    
-    // Join worker thread if it exists - simple and safe
-    if (backgroundThread.joinable()) {
-        LOG_DEBUG("Waiting for background thread to finish...");
-        backgroundThread.join();
-        LOG_DEBUG("Background thread joined successfully");
+    // Join worker thread if it exists
+    if (workerThread.joinable()) {
+        LOG_DEBUG("Waiting for worker thread to finish...");
+        // We use a short timeout join simulation here since std::thread doesn't support timed_join
+        // In a real destructor we should join, but if it's stuck we might hang.
+        // Given the design, we'll just join and hope the cancellation flag works.
+        workerThread.join();
+        LOG_DEBUG("Worker thread joined successfully");
     }
     
     // Clean up HTTP client
@@ -130,71 +126,6 @@ std::string BackgroundManager::fetchImageUrl() {
     }
 }
 
-void BackgroundManager::fetchImageUrlAsync(int width, int height) {
-    // Skip if already fetching
-    if (isFetching.load()) {
-        LOG_DEBUG("URL fetch already in progress, skipping");
-        return;
-    }
-    
-    // Join previous fetch thread if it exists
-    if (fetchThread.joinable()) {
-        LOG_DEBUG("Joining previous fetch thread before starting new one");
-        fetchThread.join();
-        LOG_DEBUG("Previous fetch thread joined successfully");
-    }
-    
-    LOG_INFO("Starting asynchronous URL fetch");
-    isFetching.store(true);
-    
-    fetchThread = std::thread([this, width, height]() {
-        LOG_DEBUG("Fetch thread started");
-        
-        // Check if we should stop
-        if (shouldStopThread.load()) {
-            LOG_DEBUG("Fetch thread cancelled before starting work");
-            isFetching.store(false);
-            return;
-        }
-        
-        // Perform the blocking HTTP request on this background thread
-        std::string imageUrl = fetchImageUrl();
-        
-        // Check again after potentially long operation
-        if (shouldStopThread.load()) {
-            LOG_DEBUG("Fetch thread cancelled after fetchImageUrl");
-            isFetching.store(false);
-            return;
-        }
-        
-        if (!imageUrl.empty()) {
-            LOG_INFO("Successfully fetched image URL, starting image load");
-            // Trigger async image load with fetched URL
-            loadImageAsync(imageUrl, width, height);
-            
-            // Reset failure counter on successful fetch
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                consecutiveFailures.store(0);
-            }
-        } else {
-            LOG_ERROR("Failed to fetch image URL");
-            // Track failure for backoff
-            time_t now = time(nullptr);
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                consecutiveFailures.fetch_add(1);
-                lastFailedAttempt.store(now);
-            }
-            LOG_WARNING("Background fetch failed (attempt %d), will retry with backoff", 
-                       consecutiveFailures.load());
-        }
-        
-        isFetching.store(false);
-        LOG_DEBUG("Fetch thread finished");
-    });
-}
-
 SDL_Surface* BackgroundManager::createDarkeningOverlay(int width, int height) {
     SDL_Surface* overlaySurface = SDL_CreateRGBSurface(0, width, height, 32, 
         0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
@@ -219,8 +150,8 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
     cli.set_follow_location(true);
     
     // Set aggressive timeouts to prevent hangs
-    cli.set_read_timeout(5, 0);
-    cli.set_write_timeout(5, 0);
+    cli.set_read_timeout(10, 0);
+    cli.set_write_timeout(10, 0);
     cli.set_connection_timeout(5, 0);
     
     LOG_DEBUG("Fetching image from host: %s, path: %s", host.c_str(), path.c_str());
@@ -284,91 +215,82 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
     return nullptr;
 }
 
-void BackgroundManager::loadImageAsync(const std::string& url, int width, int height) {
+void BackgroundManager::startBackgroundUpdate(int width, int height) {
     // Skip if already loading
     if (isLoading.load()) {
-        LOG_DEBUG("Background image load already in progress, skipping");
+        LOG_DEBUG("Background update already in progress, skipping");
         return;
     }
     
-    // Check thread count limit
-    if (threadCount.load() >= MAX_THREADS) {
-        LOG_WARNING("Max background threads reached (%d), skipping image load", MAX_THREADS);
-        return;
+    // Clean up previous thread if it exists
+    if (workerThread.joinable()) {
+        LOG_DEBUG("Joining previous worker thread");
+        workerThread.join();
     }
     
-    // CRITICAL: Join previous thread before starting a new one
-    // This ensures we maintain ownership and prevent use-after-free
-    if (backgroundThread.joinable()) {
-        LOG_DEBUG("Joining previous background thread before starting new one");
-        
-        // Signal the thread to stop if it's taking too long
-        time_t now = time(nullptr);
-        time_t lastStart = lastThreadStart.load();
-        if (lastStart > 0 && (now - lastStart) > THREAD_TIMEOUT) {
-            LOG_WARNING("Previous background thread running for %ld seconds, signaling stop", now - lastStart);
-            shouldStopThread.store(true);
-        }
-        
-        // Always join - never detach
-        backgroundThread.join();
-        shouldStopThread.store(false); // Reset for next thread
-        LOG_DEBUG("Previous background thread joined successfully");
-    }
-    
-    LOG_INFO("Starting background image load from: %s", url.c_str());
-    time_t now = time(nullptr);
-    lastThreadStart.store(now);
-    threadCount.fetch_add(1);
+    LOG_INFO("Starting background update");
     isLoading.store(true);
+    shouldStopThread.store(false);
+    lastThreadStart.store(time(nullptr));
     
-    backgroundThread = std::thread([this, url, width, height]() {
-        LOG_DEBUG("Background thread started");
+    workerThread = std::thread([this, width, height]() {
+        LOG_DEBUG("Worker thread started");
         
-        // Check if we should stop before doing work
-        if (shouldStopThread.load()) {
-            LOG_DEBUG("Background thread cancelled before starting work");
-            isLoading.store(false);
-            threadCount.fetch_sub(1);
-            return;
-        }
-        
-        SDL_Surface* newImage = loadImage(url, width, height);
-        
-        // Check again after potentially long operation
-        if (shouldStopThread.load()) {
-            LOG_DEBUG("Background thread cancelled after loadImage");
-            if (newImage) {
-                SDL_FreeSurface(newImage);
+        try {
+            if (shouldStopThread.load()) {
+                isLoading.store(false);
+                return;
             }
-            isLoading.store(false);
-            threadCount.fetch_sub(1);
-            return;
-        }
-        
-        if (newImage) {
-            LOG_INFO("Successfully loaded background image (%dx%d)", newImage->w, newImage->h);
             
-            // Critical section: set pending image with ready flag
-            {
-                std::lock_guard<std::mutex> lock(mutex);
+            // Step 1: Fetch URL
+            std::string imageUrl = fetchImageUrl();
+            
+            if (shouldStopThread.load()) {
+                isLoading.store(false);
+                return;
+            }
+            
+            if (!imageUrl.empty()) {
+                // Step 2: Load Image
+                SDL_Surface* newImage = loadImage(imageUrl, width, height);
                 
-                // Free any existing pending image that wasn't processed
-                if (pendingImage) {
-                    LOG_WARNING("Previous pendingImage was not processed, freeing it");
-                    SDL_FreeSurface(pendingImage);
+                if (shouldStopThread.load()) {
+                    if (newImage) SDL_FreeSurface(newImage);
+                    isLoading.store(false);
+                    return;
                 }
                 
-                pendingImage = newImage;
-                pendingImageReady = true;  // Signal main thread to process it
+                if (newImage) {
+                    LOG_INFO("Successfully loaded background image (%dx%d)", newImage->w, newImage->h);
+                    
+                    std::lock_guard<std::mutex> lock(mutex);
+                    if (pendingImage) {
+                        SDL_FreeSurface(pendingImage);
+                    }
+                    pendingImage = newImage;
+                    pendingImageReady = true;
+                    consecutiveFailures.store(0);
+                } else {
+                    LOG_ERROR("Failed to load background image from: %s", imageUrl.c_str());
+                    // Count as failure
+                    std::lock_guard<std::mutex> lock(mutex);
+                    consecutiveFailures.fetch_add(1);
+                    lastFailedAttempt.store(time(nullptr));
+                }
+            } else {
+                LOG_ERROR("Failed to fetch image URL");
+                std::lock_guard<std::mutex> lock(mutex);
+                consecutiveFailures.fetch_add(1);
+                lastFailedAttempt.store(time(nullptr));
             }
-        } else {
-            LOG_ERROR("Failed to load background image from: %s", url.c_str());
+        } catch (const std::exception& e) {
+            LOG_ERROR("Exception in worker thread: %s", e.what());
+        } catch (...) {
+            LOG_ERROR("Unknown exception in worker thread");
         }
         
         isLoading.store(false);
-        threadCount.fetch_sub(1);
-        LOG_DEBUG("Background thread finished");
+        LOG_DEBUG("Worker thread finished");
     });
 }
 
@@ -397,7 +319,7 @@ void BackgroundManager::updateTextures(SDL_Renderer* renderer) {
             pendingImageReady = false;
             currentImage = surfaceToProcess;  // Update current immediately
         }
-    } // Mutex released - background thread can now set new pendingImage
+    } // Mutex released
     
     // Now we own surfaceToProcess exclusively - safe to use for SDL operations
     if (surfaceToProcess) {
@@ -484,45 +406,45 @@ void BackgroundManager::update(int width, int height) {
     time_t currentTime;
     time(&currentTime);
     
-    // Check for hung thread - signal it to stop but don't detach
+    // Check for hung thread
     time_t lastStart = lastThreadStart.load();
     if (isLoading.load() && lastStart > 0 && (currentTime - lastStart) > THREAD_TIMEOUT) {
-        LOG_ERROR("Background thread appears hung (running for %ld seconds), signaling stop", 
+        LOG_ERROR("Worker thread appears hung (running for %ld seconds), DETACHING", 
                   currentTime - lastStart);
         
-        // Signal the thread to stop cooperatively
-        shouldStopThread.store(true);
+        // CRITICAL FIX: Detach the stuck thread to prevent zombie process
+        // We accept the leak to keep the app alive
+        if (workerThread.joinable()) {
+            workerThread.detach();
+        }
         
-        // Reset loading flag so we can try again
-        // The hung thread will be joined on next loadImageAsync call or in destructor
+        // Reset state to allow new attempts
         isLoading.store(false);
+        shouldStopThread.store(false); // Reset flag for next thread
         
-        // Don't reset threadCount - it will be decremented when thread finishes
+        // Force a backoff to avoid spamming threads if network is totally broken
+        std::lock_guard<std::mutex> lock(mutex);
+        consecutiveFailures.fetch_add(1);
+        lastFailedAttempt.store(currentTime);
+        
+        return;
     }
     
-    // Check if we need to start loading a new image
-    // CRITICAL: Also check !isFetching to prevent blocking the main thread
-    if (!isLoading.load() && !isFetching.load() && 
+    // Check if we need to start a new update
+    if (!isLoading.load() && 
         (difftime(currentTime, lastUpdate) > BACKGROUND_UPDATE_INTERVAL || currentImage == nullptr)) {
         
-        // Take a consistent snapshot of the backoff state
+        // Backoff logic
         const int failures = consecutiveFailures.load();
         const time_t lastFailureTime = lastFailedAttempt.load();
-        
-        // Calculate backoff delay based on consecutive failures (cap at 10 minutes)
         int backoffDelay = std::min(30 * failures, 600);
         
-        // Check if enough time has passed since last failed attempt
         if (failures > 0 && difftime(currentTime, lastFailureTime) < backoffDelay) {
-            // Still in backoff period, skip this attempt
             return;
         }
         
-        // Update lastUpdate BEFORE attempting fetch to prevent infinite retries
         lastUpdate = currentTime;
-        
-        // Start async fetch - this returns immediately without blocking
-        fetchImageUrlAsync(width, height);
+        startBackgroundUpdate(width, height);
     }
 }
 
@@ -550,11 +472,9 @@ void BackgroundManager::draw(SDL_Renderer* renderer) {
         }
     } else {
         // Fallback: render solid color background
-        // This ensures the app remains functional when images are unavailable
         SDL_SetRenderDrawColor(renderer, FALLBACK_BG_RED, FALLBACK_BG_GREEN, FALLBACK_BG_BLUE, 255);
         SDL_RenderClear(renderer);
         
-        // Log only once per startup or when transitioning to fallback
         static bool fallbackLogged = false;
         if (!fallbackLogged) {
             LOG_DEBUG("Using fallback background color (no image available yet)");

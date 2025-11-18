@@ -23,6 +23,9 @@ public:
 
     // Log memory usage from /proc/self/statm
     void logMemoryUsage();
+    
+    // Get formatted memory usage string
+    std::string getFormattedMemoryUsage();
 
     // Prevent copying
     Logger(const Logger&) = delete;
