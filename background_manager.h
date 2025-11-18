@@ -47,6 +47,7 @@ private:
     std::unique_ptr<HTTPClient> httpClient;
     
     // Thread management
+    std::mutex workerThreadMutex; // Protects workerThread lifecycle
     std::atomic<bool> shouldStopThread{false};
     std::atomic<time_t> lastThreadStart{0};
     static constexpr int THREAD_TIMEOUT = 60; // seconds

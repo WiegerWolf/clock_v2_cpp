@@ -48,7 +48,7 @@ BackgroundManager::~BackgroundManager() {
     
     // Join worker thread if it exists
     if (workerThread.joinable()) {
-        LOG_DEBUG("Waiting for worker thread to finish...");
+        LOG_DEBUG("Waiting for worker thread to finish (timeout 5s)...");
         // We use a short timeout join simulation here since std::thread doesn't support timed_join
         // In a real destructor we should join, but if it's stuck we might hang.
         // Given the design, we'll just join and hope the cancellation flag works.
@@ -92,7 +92,8 @@ std::string BackgroundManager::fetchImageUrl() {
     // Use shared httpClient with mutex protection for thread safety
     std::lock_guard<std::mutex> clientLock(httpClientMutex);
     
-    auto response = httpClient->get(BACKGROUND_API_URL_PATH);
+    // Use 5s timeout
+    auto response = httpClient->get(BACKGROUND_API_URL_PATH, 5);
     
     if (!response.success) {
         std::lock_guard<std::mutex> lock(mutex);
@@ -149,10 +150,10 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
     httplib::SSLClient cli(host);
     cli.set_follow_location(true);
     
-    // Set aggressive timeouts to prevent hangs
-    cli.set_read_timeout(10, 0);
-    cli.set_write_timeout(10, 0);
-    cli.set_connection_timeout(5, 0);
+    // Set aggressive timeouts to prevent hangs (5s read/write, 3s connect)
+    cli.set_read_timeout(5, 0);
+    cli.set_write_timeout(5, 0);
+    cli.set_connection_timeout(3, 0);
     
     LOG_DEBUG("Fetching image from host: %s, path: %s", host.c_str(), path.c_str());
     
@@ -216,6 +217,8 @@ SDL_Surface* BackgroundManager::loadImage(const std::string& url, int width, int
 }
 
 void BackgroundManager::startBackgroundUpdate(int width, int height) {
+    std::lock_guard<std::mutex> threadLock(workerThreadMutex);
+
     // Skip if already loading
     if (isLoading.load()) {
         LOG_DEBUG("Background update already in progress, skipping");
