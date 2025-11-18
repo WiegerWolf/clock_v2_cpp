@@ -409,24 +409,12 @@ void BackgroundManager::update(int width, int height) {
     // Check for hung thread
     time_t lastStart = lastThreadStart.load();
     if (isLoading.load() && lastStart > 0 && (currentTime - lastStart) > THREAD_TIMEOUT) {
-        LOG_ERROR("Worker thread appears hung (running for %ld seconds), DETACHING", 
-                  currentTime - lastStart);
+        LOG_WARNING("Worker thread running for %ld seconds (timeout is %d). It should finish soon due to HTTP timeouts.", 
+                  currentTime - lastStart, THREAD_TIMEOUT);
         
-        // CRITICAL FIX: Detach the stuck thread to prevent zombie process
-        // We accept the leak to keep the app alive
-        if (workerThread.joinable()) {
-            workerThread.detach();
-        }
-        
-        // Reset state to allow new attempts
-        isLoading.store(false);
-        shouldStopThread.store(false); // Reset flag for next thread
-        
-        // Force a backoff to avoid spamming threads if network is totally broken
-        std::lock_guard<std::mutex> lock(mutex);
-        consecutiveFailures.fetch_add(1);
-        lastFailedAttempt.store(currentTime);
-        
+        // Do NOT detach. We must wait for it to finish to avoid use-after-free.
+        // The HTTP client timeouts (10s) should ensure it doesn't hang forever.
+        // We just skip starting a new update until this one finishes.
         return;
     }
     
