@@ -1,3 +1,5 @@
+# Deprecated in favour of https://github.com/WiegerWolf/clock_v3_cpp
+
 ![image](https://github.com/user-attachments/assets/e7d036ee-261e-4ff3-a300-953261e19f50)
 
 ## Deps
